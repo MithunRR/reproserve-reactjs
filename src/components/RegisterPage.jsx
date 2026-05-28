@@ -388,6 +388,9 @@ useEffect(() => {
           account?.firstName && account?.lastName
             ? `${account.firstName} ${account.lastName}`
             : account?.name || "User",
+        firstName: account?.firstName || "",
+        lastName: account?.lastName || "",
+        phone: account?.phone || "",
         email: account?.email || "",
         role,
         verified: account?.verified !== undefined ? account.verified : true,

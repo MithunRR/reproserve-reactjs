@@ -12,8 +12,6 @@ export function LoginPage({ navigate, setCurrentUser }) {
 
   const getDashboardPath = (role) => {
     switch (role) {
-      case 'provider':
-        return '/service-providers';
       case 'realtor':
         return '/realtors';
       default:
@@ -64,6 +62,9 @@ export function LoginPage({ navigate, setCurrentUser }) {
           account?.firstName && account?.lastName
             ? `${account.firstName} ${account.lastName}`
             : account?.name || "User",
+        firstName: account?.firstName || "",
+        lastName: account?.lastName || "",
+        phone: account?.phone || "",
         email: account?.email || "",
         role,
         verified: account?.verified !== undefined ? account.verified : true,
