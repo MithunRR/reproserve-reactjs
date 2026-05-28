@@ -1,12 +1,14 @@
 import axios from 'axios';
 
-// Always use relative URLs — the React build is served by the same Express
-// app that serves /api, so the browser is on the same origin in production.
-// In dev, Vite's proxy in vite.config.js forwards /api to the backend.
-// Override via window.API_BASE_URL for one-off testing.
+// Priority: window.API_BASE_URL (runtime override) → VITE_API_BASE_URL (.env.local)
+// → '' (relative). With '' the dev Vite proxy forwards /api → local backend, and
+// in prod the same-origin Express serves /api itself.
 const getApiBaseUrl = () => {
   if (typeof window !== 'undefined' && typeof window.API_BASE_URL === 'string') {
     return window.API_BASE_URL;
+  }
+  if (import.meta.env && import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
   }
   return '';
 };

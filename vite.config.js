@@ -57,17 +57,14 @@
     },
     server: {
       port: 3003,
-      open: false, // Prevents new tabs on every restart
-  hmr: {
-    overlay: true, // Keeps in-tab hot reload working
-  },
+      open: false,
+      hmr: { overlay: true },
+      // Forwards /api and /assets to the local Node backend (default :3000).
+      // To hit the live server instead, set VITE_API_BASE_URL in .env.local —
+      // axios will then use absolute URLs and skip this proxy entirely.
       proxy: {
-        '/api': {
-          target: 'https://webrepro.creativecrows.com',
-          changeOrigin: true,
-          secure: false, // Allow self-signed certificates
-          rewrite: (path) => path.replace(/^\/api/, '/api'),
-        },
-  },
+        '/api':    { target: 'http://localhost:3000', changeOrigin: true, secure: false },
+        '/assets': { target: 'http://localhost:3000', changeOrigin: true, secure: false },
+      },
     },
   });

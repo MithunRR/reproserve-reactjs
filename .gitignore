@@ -1,1 +1,7 @@
 /node_modules
+/build
+
+# Local env overrides — never commit secrets or per-machine URLs
+.env
+.env.local
+.env.*.local

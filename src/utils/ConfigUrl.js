@@ -1,12 +1,15 @@
-// In dev (Vite on :3003) the proxy in vite.config.js forwards /api → the
-// backend. In prod, Express on the same domain serves /api itself, so a
-// relative path "/api" works in both environments — no rebuild needed when
-// the domain changes.
-export const baseUrl = "/api";
+// Set VITE_API_BASE_URL in .env.local to point at a specific backend
+// (e.g. https://reproserve.creativecrows.com to hit live from your laptop).
+// Leave it unset for the default flow:
+//   - dev: Vite proxy (vite.config.js) forwards /api → http://localhost:3000
+//   - prod: Express on the same origin serves /api itself
+const apiHost = (import.meta.env && import.meta.env.VITE_API_BASE_URL) || '';
 
-// Host that serves uploaded files (photos, videos). Same origin as the API
-// but without the /api prefix. Relative "" means "current origin".
-export const assetHost = baseUrl.replace(/\/api\/?$/, '');
+export const baseUrl = `${apiHost}/api`;
+
+// Uploaded files (photos, videos) are served from the same origin as the API,
+// just without the /api prefix.
+export const assetHost = apiHost;
 
 // Convert a server-relative asset path (e.g. /assets/photos/x.jpg) into
 // an absolute URL. Pass-through anything that already looks absolute.
