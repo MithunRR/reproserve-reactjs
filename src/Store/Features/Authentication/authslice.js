@@ -183,6 +183,14 @@ const initialState = {
     adminStatsLoading: false,
     adminStatsError: null,
 
+    // Provider/realtor accounts awaiting admin approval.
+    pendingProviders: [],
+    pendingRealtors: [],
+    pendingApprovalsLoading: false,
+    pendingApprovalsError: null,
+    setApprovalLoadingId: null,
+    setApprovalError: null,
+
     // ── Contact form ───────────────────────────────────────
     submitContactLoading: false,
     submitContactSuccess: false,
@@ -308,6 +316,39 @@ const authSlice = createSlice({
         fetchAdminStatsFailed: (state, action) => {
             state.adminStatsLoading = false;
             state.adminStatsError = action.payload;
+        },
+
+        // Pending provider/realtor approvals.
+        fetchPendingApprovalsStart: (state) => {
+            state.pendingApprovalsLoading = true;
+            state.pendingApprovalsError = null;
+        },
+        fetchPendingApprovalsSuccess: (state, action) => {
+            state.pendingApprovalsLoading = false;
+            const data = action.payload?.data || action.payload || {};
+            state.pendingProviders = Array.isArray(data.serviceProviders) ? data.serviceProviders : [];
+            state.pendingRealtors  = Array.isArray(data.realtors) ? data.realtors : [];
+        },
+        fetchPendingApprovalsFailed: (state, action) => {
+            state.pendingApprovalsLoading = false;
+            state.pendingApprovalsError = action.payload;
+        },
+
+        setApprovalStart: (state, action) => {
+            state.setApprovalLoadingId = action.payload?.id ?? null;
+            state.setApprovalError = null;
+        },
+        setApprovalSuccess: (state, action) => {
+            state.setApprovalLoadingId = null;
+            const updated = action.payload?.data || action.payload;
+            if (updated?.id) {
+                state.pendingProviders = state.pendingProviders.filter((u) => u.id !== updated.id);
+                state.pendingRealtors  = state.pendingRealtors.filter((u) => u.id !== updated.id);
+            }
+        },
+        setApprovalFailed: (state, action) => {
+            state.setApprovalLoadingId = null;
+            state.setApprovalError = action.payload;
         },
 
         // ── Contact form ───────────────────────────────────
@@ -1028,6 +1069,8 @@ export const {
     verifyEmailStart, verifyEmailSuccess, verifyEmailFailed, resetVerifyEmailFlag,
     resendVerificationStart, resendVerificationSuccess, resendVerificationFailed, resetResendVerificationFlag,
     fetchAdminStatsStart, fetchAdminStatsSuccess, fetchAdminStatsFailed,
+    fetchPendingApprovalsStart, fetchPendingApprovalsSuccess, fetchPendingApprovalsFailed,
+    setApprovalStart, setApprovalSuccess, setApprovalFailed,
     submitContactStart, submitContactSuccess, submitContactFailed, resetSubmitContactFlag,
     fetchContactMessagesStart, fetchContactMessagesSuccess, fetchContactMessagesFailed,
     updateContactStatusStart, updateContactStatusSuccess, updateContactStatusFailed,

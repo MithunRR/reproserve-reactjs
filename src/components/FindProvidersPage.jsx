@@ -5,8 +5,9 @@ import {
   Hammer, Wrench, Zap, Droplets, Thermometer, Trees, Paintbrush,
   Shield, Key, Palette, Truck,
   Home, Building, HardHat, Grid3X3, ChevronDown,
-  CheckCircle } from
+  CheckCircle, LocateFixed, Loader2, X } from
 'lucide-react';
+import apiClient from '../utils/api';
 import { MessagingModal } from './MessagingModal';
 import { QuoteRequestModal } from './QuoteRequestModal';
 import { useDispatch, useSelector } from 'react-redux';
@@ -152,6 +153,13 @@ export function FindProvidersPage({ navigate }) {
   const [sortDropdownPosition, setSortDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const [subcategoryDropdownPosition, setSubcategoryDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const [location, setLocation] = useState('');
+  // Radius-search state. coords is the user's centre point (browser GPS or
+  // geocoded ZIP); radiusKm narrows the result set to that distance from it.
+  const [coords, setCoords] = useState(null);   // { lat, lng } | null
+  const [radiusKm, setRadiusKm] = useState(5);
+  const [geolocating, setGeolocating] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
+  const [locationLabel, setLocationLabel] = useState(''); // "Your location" / city name
   const [selectedCategory, setSelectedCategory] = useState(() => {
     // Pre-select the category chosen from the home page category buttons.
     const storedCategory = localStorage.getItem('selectedProviderCategory');
@@ -175,10 +183,69 @@ export function FindProvidersPage({ navigate }) {
   const createQuoteSuccess = useSelector((state) => state.AuthReducer.createQuoteSuccess);
   const createQuoteError = useSelector((state) => state.AuthReducer.createQuoteError);
 
-  // Load service providers from the API.
+  // Load service providers from the API. When coords are set, the backend
+  // applies a Haversine radius filter and returns sorted-by-distance results.
   useEffect(() => {
-    dispatch(fetchProvidersStart({ role: 'service_provider' }));
-  }, [dispatch]);
+    const payload = { role: 'service_provider' };
+    if (coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng)) {
+      payload.lat = coords.lat;
+      payload.lng = coords.lng;
+      payload.radius = radiusKm;
+    }
+    dispatch(fetchProvidersStart(payload));
+  }, [dispatch, coords, radiusKm]);
+
+  // Browser-native geolocation — no API key, just a permission prompt.
+  const useMyLocation = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      toast.error('Geolocation is not supported by this browser.');
+      return;
+    }
+    setGeolocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocationLabel('Your location');
+        setLocation('');
+        setGeolocating(false);
+        toast.success(`Showing providers within ${radiusKm} km`);
+      },
+      (err) => {
+        setGeolocating(false);
+        toast.error(err.message || 'Could not get your location');
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60_000 }
+    );
+  };
+
+  // Geocode whatever was typed into the location box via /api/geocode (which
+  // proxies OSM Nominatim). Triggered on Enter or blur.
+  const geocodeTypedLocation = async () => {
+    const q = location.trim();
+    if (!q) return;
+    setGeocoding(true);
+    try {
+      const res = await apiClient.get(`/api/geocode?q=${encodeURIComponent(q)}`);
+      const hit = res.data?.data;
+      if (hit?.lat != null && hit?.lng != null) {
+        setCoords({ lat: hit.lat, lng: hit.lng });
+        setLocationLabel(hit.displayName || q);
+        toast.success(`Showing providers within ${radiusKm} km`);
+      } else {
+        toast.error('Could not find that location.');
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.message || err.message || 'Lookup failed';
+      toast.error(msg);
+    } finally {
+      setGeocoding(false);
+    }
+  };
+
+  const clearRadius = () => {
+    setCoords(null);
+    setLocationLabel('');
+  };
 
   useEffect(() => {
     if (createQuoteSuccess) {
@@ -318,7 +385,8 @@ export function FindProvidersPage({ navigate }) {
     specialties: Array.isArray(u.specialties) ? u.specialties : [],
     description: u.businessDesc || 'No description provided.',
     startingPrice: u.startingPrice || 'Contact for pricing',
-    availability: u.availability || 'Contact for availability'
+    availability: u.availability || 'Contact for availability',
+    distanceKm: u.distanceKm != null ? Number(u.distanceKm) : null
   }));
 
 
@@ -448,6 +516,69 @@ export function FindProvidersPage({ navigate }) {
               boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
             }}>
             
+            {/* Radius search controls — browser GPS or typed ZIP/address, both
+                free via OpenStreetMap Nominatim. */}
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <button
+                type="button"
+                onClick={useMyLocation}
+                disabled={geolocating}
+                className="flex items-center gap-2 px-4 py-2 text-white rounded-lg hover:scale-105 transition-all duration-300 cursor-pointer shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.1))',
+                  backdropFilter: 'blur(10px)',
+                  border: '2px solid rgba(255,255,255,0.4)',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.3)'
+                }}>
+                {geolocating
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <LocateFixed className="h-4 w-4" />}
+                <span>Use my location</span>
+              </button>
+
+              <div className="flex items-center gap-2 text-white">
+                <span className="text-sm drop-shadow-md">Within</span>
+                <select
+                  value={radiusKm}
+                  onChange={(e) => setRadiusKm(Number(e.target.value))}
+                  className="px-3 py-2 rounded-md text-white text-sm cursor-pointer focus:outline-none"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.1))',
+                    border: '2px solid rgba(255,255,255,0.4)',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.3)',
+                    backdropFilter: 'blur(10px)',
+                    // Hide native arrow + use our own caret so colours stay on-theme
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    MozAppearance: 'none',
+                    paddingRight: '28px',
+                    backgroundImage:
+                      "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'><polyline points='6 9 12 15 18 9'/></svg>\")",
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 8px center'
+                  }}>
+                  {[2, 5, 10, 25, 50, 100].map((k) =>
+                    // Inline bg/color so the OS-rendered options match the dark theme
+                    <option key={k} value={k} style={{ background: '#004571', color: '#fff' }}>{k} km</option>
+                  )}
+                </select>
+              </div>
+
+              {coords &&
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 border border-white/30 text-white text-sm">
+                  <MapPin className="h-3.5 w-3.5" />
+                  <span className="max-w-[280px] truncate">{locationLabel}</span>
+                  <button
+                    type="button"
+                    onClick={clearRadius}
+                    className="p-0.5 rounded-full hover:bg-white/20"
+                    title="Clear radius filter">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              }
+            </div>
+
             <div className="flex flex-nowrap items-center gap-3 mb-4">
               <Filter className="h-5 w-5 text-white flex-shrink-0" />
 
@@ -465,23 +596,27 @@ export function FindProvidersPage({ navigate }) {
                       border: '2px solid rgba(255, 255, 255, 0.4)',
                       boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
                     }} />
-                  
+
                 </div>
 
-                {/* Location Input */}
+                {/* Location Input — hit Enter or blur to geocode via OSM */}
                 <div className="relative">
                   <input
-                    placeholder="Location or ZIP code"
+                    placeholder="Location or ZIP (press Enter)"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    className="w-full px-4 py-3 text-white rounded-lg hover:scale-105 transition-all duration-300 cursor-pointer shadow-lg"
+                    onBlur={geocodeTypedLocation}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); geocodeTypedLocation(); } }}
+                    className="w-full px-4 py-3 pr-10 text-white rounded-lg hover:scale-105 transition-all duration-300 cursor-pointer shadow-lg"
                     style={{
                       background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.1))',
                       backdropFilter: 'blur(10px)',
                       border: '2px solid rgba(255, 255, 255, 0.4)',
                       boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
                     }} />
-                  
+                  {geocoding &&
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white animate-spin" />
+                  }
                 </div>
 
                 {/* Category Dropdown */}
@@ -854,12 +989,24 @@ export function FindProvidersPage({ navigate }) {
 
             {/* Provider Results */}
             <div className="lg:w-full">
-              <div className="mb-6 flex justify-between items-center">
+              <div className="mb-6 flex justify-between items-center flex-wrap gap-2">
                 <p className="text-white drop-shadow-md">
                   {sortedProviders.length} providers found
                   {selectedCategory && ` in ${selectedCategory}`}
                   {selectedSubcategory && ` - ${selectedSubcategory}`}
+                  {coords && ` within ${radiusKm} km`}
                 </p>
+                {coords &&
+                  <p className="text-[11px] text-white/60">
+                    Geocoding ©{' '}
+                    <a
+                      href="https://www.openstreetmap.org/copyright"
+                      target="_blank" rel="noreferrer"
+                      className="underline hover:text-white">
+                      OpenStreetMap contributors
+                    </a>
+                  </p>
+                }
               </div>
 
               <div className="space-y-8">
@@ -910,9 +1057,14 @@ export function FindProvidersPage({ navigate }) {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                           <div>
-                            <div className="flex items-center text-sm text-white mb-3">
-                              <MapPin className="h-4 w-4 mr-2 text-sky-blue" />
+                            <div className="flex items-center text-sm text-white mb-3 flex-wrap gap-2">
+                              <MapPin className="h-4 w-4 mr-1 text-sky-blue" />
                               <span className="drop-shadow-md">{provider.location}</span>
+                              {provider.distanceKm != null &&
+                                <span className="px-2 py-0.5 rounded-full text-[11px] bg-coral-orange/20 border border-coral-orange/40 text-white">
+                                  {provider.distanceKm.toFixed(1)} km away
+                                </span>
+                              }
                             </div>
                             <div className="text-sm text-white">
                               <div className="drop-shadow-md">{provider.yearsInBusiness} years in business</div>

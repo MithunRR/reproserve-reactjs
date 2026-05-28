@@ -57,6 +57,8 @@ import {
     resendVerificationStart, resendVerificationSuccess, resendVerificationFailed,
 
     fetchAdminStatsStart, fetchAdminStatsSuccess, fetchAdminStatsFailed,
+    fetchPendingApprovalsStart, fetchPendingApprovalsSuccess, fetchPendingApprovalsFailed,
+    setApprovalStart, setApprovalSuccess, setApprovalFailed,
 
     submitContactStart, submitContactSuccess, submitContactFailed,
     fetchContactMessagesStart, fetchContactMessagesSuccess, fetchContactMessagesFailed,
@@ -148,6 +150,39 @@ function* fetchAdminStatsSaga() {
         }
     } catch (error) {
         yield put(fetchAdminStatsFailed(extractErrorMessage(error, 'Failed to load admin stats')));
+    }
+}
+
+// Pending provider/realtor approvals — admin only.
+function* fetchPendingApprovalsSaga() {
+    try {
+        const response = yield call(axios.get, `${baseUrl}/admin/pending-approvals`, authHeaders());
+        if (response.status === 200) {
+            yield put(fetchPendingApprovalsSuccess(response.data));
+        } else {
+            yield put(fetchPendingApprovalsFailed(response.data?.message || 'Failed to load pending approvals'));
+        }
+    } catch (error) {
+        yield put(fetchPendingApprovalsFailed(extractErrorMessage(error, 'Failed to load pending approvals')));
+    }
+}
+
+function* setApprovalSaga(action) {
+    try {
+        const { id, status } = action.payload || {};
+        const response = yield call(
+            axios.put,
+            `${baseUrl}/admin/users/${id}/approval`,
+            { status },
+            authHeaders()
+        );
+        if (response.status === 200) {
+            yield put(setApprovalSuccess(response.data));
+        } else {
+            yield put(setApprovalFailed(response.data?.message || 'Failed to update approval'));
+        }
+    } catch (error) {
+        yield put(setApprovalFailed(extractErrorMessage(error, 'Failed to update approval')));
     }
 }
 
@@ -778,6 +813,8 @@ function* watchAuth() {
     yield takeLatest(verifyEmailStart.type, verifyEmailSaga);
     yield takeLatest(resendVerificationStart.type, resendVerificationSaga);
     yield takeLatest(fetchAdminStatsStart.type, fetchAdminStatsSaga);
+    yield takeLatest(fetchPendingApprovalsStart.type, fetchPendingApprovalsSaga);
+    yield takeEvery(setApprovalStart.type, setApprovalSaga);
     yield takeLatest(submitContactStart.type, submitContactSaga);
     yield takeLatest(fetchContactMessagesStart.type, fetchContactMessagesSaga);
     yield takeLatest(updateContactStatusStart.type, updateContactStatusSaga);

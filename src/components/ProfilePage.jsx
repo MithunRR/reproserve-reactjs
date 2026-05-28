@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, MapPin, Edit3, Camera, Star, Calendar, MessageSquare, FileText, Home, Upload, Plus, Building, DollarSign, CheckCircle2 } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Edit3, Camera, Star, Calendar, MessageSquare, FileText, Home, Upload, Plus, Building, DollarSign, CheckCircle2, LocateFixed, Loader2 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
 import { QuoteRequestModal } from './QuoteRequestModal';
 import { RequestDetailsModal } from './RequestDetailsModal';
 import { RespondQuoteModal } from './RespondQuoteModal';
 import { ReviewModal } from './ReviewModal';
-import { AdminDashboard } from './AdminDashboard';
 import {
   quoteRequestsStorage,
   profileDataStorage,
@@ -189,7 +188,9 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
       bio: apiProfileData.businessDesc ?? prev.bio ?? '',
       businessName: apiProfileData.businessName ?? prev.businessName ?? '',
       serviceTypeId: apiProfileData.serviceTypeId ?? prev.serviceTypeId ?? '',
-      licenseNumber: apiProfileData.licenseNumber ?? prev.licenseNumber ?? ''
+      licenseNumber: apiProfileData.licenseNumber ?? prev.licenseNumber ?? '',
+      latitude: apiProfileData.latitude != null ? Number(apiProfileData.latitude) : null,
+      longitude: apiProfileData.longitude != null ? Number(apiProfileData.longitude) : null
     }));
   }, [apiProfileData]);
 
@@ -257,6 +258,35 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
     };
 
     dispatch(updateProfileStart({ id: currentUser.id, payload }));
+  };
+
+  // Save the user's GPS-resolved coordinates to the backend. Used by the
+  // "Use my current location" button in the Service Location panel.
+  const [gpsBusy, setGpsBusy] = useState(false);
+  const handleUseGPSLocation = () => {
+    if (!currentUser?.id) return;
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      toast.error('Geolocation is not supported by this browser.');
+      return;
+    }
+    setGpsBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        dispatch(updateProfileStart({
+          id: currentUser.id,
+          payload: { latitude: lat, longitude: lng }
+        }));
+        setGpsBusy(false);
+        toast.success('Location updated — customers nearby can now find you.');
+      },
+      (err) => {
+        setGpsBusy(false);
+        toast.error(err.message || 'Could not get your location');
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
   };
 
   // Save only the business/company fields — keeps personal info untouched.
@@ -1374,11 +1404,10 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
   };
 
 
-  // Admins get a separate screen entirely. The check happens AFTER all the
-  // hooks above are declared so the hook order stays consistent across
-  // renders (Rules of Hooks).
+  // Admins have their own dedicated /admin route — bounce them there.
   if (currentUser?.role === 'admin') {
-    return <AdminDashboard navigate={navigate} currentUser={currentUser} setCurrentUser={setCurrentUser} />;
+    navigate('/admin');
+    return null;
   }
 
   return (
@@ -1789,6 +1818,69 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
                       className="px-4 py-2 bg-sky-blue text-white rounded-xl hover:bg-sky-blue/90 hover:scale-105 transition-all duration-300 font-semibold shadow-lg disabled:opacity-60 disabled:cursor-not-allowed">
                       {updateProfileLoading ? 'Saving…' : 'Save Business Details'}
                     </button>
+                  </div>
+                }
+              </div>
+            }
+
+            {/* Service Location — provider/realtor only. Powers the "providers
+                within N km" search on the public Find Providers page. */}
+            {isBusinessRole &&
+              <div
+                className="rounded-2xl shadow-lg p-8 relative overflow-hidden mt-8"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
+                  backdropFilter: 'blur(20px)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
+                }}>
+                <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
+                  <div>
+                    <h3 className="text-xl text-white drop-shadow-lg flex items-center gap-2">
+                      <MapPin className="h-5 w-5" /> Service Location
+                    </h3>
+                    <p className="text-white/80 text-sm drop-shadow-md mt-1 max-w-xl">
+                      Used to show your profile to nearby customers when they search by radius.
+                      We pick this up automatically when you save your address — or click below to set it from your device's GPS.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleUseGPSLocation}
+                    disabled={gpsBusy || updateProfileLoading}
+                    className="px-4 py-2 bg-coral-orange text-black rounded-xl hover:bg-coral-orange/90 hover:scale-105 transition-all duration-300 flex items-center gap-2 font-semibold shadow-lg disabled:opacity-60 disabled:cursor-not-allowed">
+                    {gpsBusy
+                      ? <Loader2 className="h-5 w-5 animate-spin" />
+                      : <LocateFixed className="h-5 w-5" />}
+                    <span>{gpsBusy ? 'Locating…' : 'Use my current location'}</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-white/15">
+                  <div>
+                    <div className="text-xs text-white/70 mb-1">Latitude</div>
+                    <div className="text-white font-mono">
+                      {profileData.latitude != null && profileData.latitude !== ''
+                        ? Number(profileData.latitude).toFixed(6)
+                        : <span className="text-yellow-300">Not set</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-white/70 mb-1">Longitude</div>
+                    <div className="text-white font-mono">
+                      {profileData.longitude != null && profileData.longitude !== ''
+                        ? Number(profileData.longitude).toFixed(6)
+                        : <span className="text-yellow-300">Not set</span>}
+                    </div>
+                  </div>
+                </div>
+
+                {(profileData.latitude == null || profileData.longitude == null) &&
+                  <div className="mt-4 p-3 rounded-lg bg-yellow-500/20 border border-yellow-400/50">
+                    <p className="text-sm text-white drop-shadow-md">
+                      <span className="text-yellow-300 mr-1">⚠</span>
+                      Your location is not set yet — you won't appear in radius-based searches.
+                      Click <span className="font-semibold">"Use my current location"</span> or save your address above.
+                    </p>
                   </div>
                 }
               </div>
