@@ -2,15 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
-import { Plus, Calendar, MapPin, DollarSign, Camera, X, Building, Home, Grid, List, UserCheck, User, Trash2, Maximize2, ChevronDown, Edit3 } from 'lucide-react';
+import axios from 'axios';
+import { Plus, Calendar, MapPin, DollarSign, Camera, X, Building, Home, Grid, List, UserCheck, User, Users, Trash2, Maximize2, ChevronDown, Edit3, Mail, Phone } from 'lucide-react';
 import { openHousesStorage } from '../utils/localStorage';
+import { baseUrl } from '../utils/ConfigUrl';
 import { ViewDetailsModal } from './ViewDetailsModal';
 import {
   fetchOpenHousesStart,
   createOpenHouseStart,
   updateOpenHouseStart,
   resetCreateOpenHouseFlag,
-  resetUpdateOpenHouseFlag
+  resetUpdateOpenHouseFlag,
+  createAttendanceStart,
+  resetCreateAttendanceFlag
 } from '../Store/Features/Authentication/authslice';
 
 const CAN_CREATE_ROLES = ['user', 'realtor'];
@@ -24,7 +28,10 @@ export function OpenHousePage({ navigate, currentUser }) {
     createOpenHouseError,
     updateOpenHouseLoading,
     updateOpenHouseSuccess,
-    updateOpenHouseError
+    updateOpenHouseError,
+    createAttendanceLoading,
+    createAttendanceSuccess,
+    createAttendanceError
   } = useSelector((state) => state.AuthReducer);
 
   const canCreate = !!currentUser && CAN_CREATE_ROLES.includes(currentUser.role);
@@ -53,8 +60,13 @@ export function OpenHousePage({ navigate, currentUser }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showAttendeesListModal, setShowAttendeesListModal] = useState(false);
+  const [attendeesList, setAttendeesList] = useState([]);
+  const [attendeesLoading, setAttendeesLoading] = useState(false);
+  const [attendeesError, setAttendeesError] = useState(null);
   const [selectedOpenHouse, setSelectedOpenHouse] = useState(null);
   const [selectedOpenHouseForEdit, setSelectedOpenHouseForEdit] = useState(null);
+  const [deleteTargetHouse, setDeleteTargetHouse] = useState(null);
   const [isClosingModal, setIsClosingModal] = useState(false);
 
   // New filter states
@@ -242,9 +254,29 @@ export function OpenHousePage({ navigate, currentUser }) {
       setShowCreateModal(false);
       setShowAttendanceModal(false);
       setShowDetailsModal(false);
+      setShowAttendeesListModal(false);
       setSelectedOpenHouse(null);
+      setAttendeesList([]);
+      setAttendeesError(null);
       setIsClosingModal(false);
     }, 150);
+  };
+
+  const handleViewAttendees = async (house) => {
+    setSelectedOpenHouse(house);
+    setShowAttendeesListModal(true);
+    setAttendeesLoading(true);
+    setAttendeesError(null);
+    try {
+      const response = await axios.get(`${baseUrl}/open-houses/${house.id}/attendances`);
+      const data = response?.data?.data;
+      setAttendeesList(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setAttendeesError(err?.response?.data?.message || err.message || 'Failed to load attendees');
+      setAttendeesList([]);
+    } finally {
+      setAttendeesLoading(false);
+    }
   };
 
   const buildOpenHouseFormData = (formData, isEdit) => {
@@ -343,31 +375,56 @@ export function OpenHousePage({ navigate, currentUser }) {
   const handleAttendanceSubmit = (formData) => {
     if (!selectedOpenHouse) return;
 
-    const updatedOpenHouses = openHouses.map((house) => {
-      if (house.id === selectedOpenHouse.id) {
-        return {
-          ...house,
-          attendees: [...(house.attendees || []), {
-            id: Date.now(),
-            ...formData,
-            submittedDate: new Date().toISOString()
-          }]
-        };
-      }
-      return house;
-    });
+    const count = parseInt(formData.numberOfAttendees, 10);
+    const message = Number.isFinite(count) && count > 0
+      ? `No. of attendees: ${count}`
+      : null;
 
-    setOpenHouses(updatedOpenHouses);
-    openHousesStorage.set(updatedOpenHouses);
-    handleCloseModal();
+    dispatch(createAttendanceStart({
+      openHouseId: selectedOpenHouse.id,
+      payload: {
+        userId: currentUser?.id || null,
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        message
+      }
+    }));
   };
 
-  const handleDeleteOpenHouse = (houseId) => {
-    if (window.confirm('Are you sure you want to delete this open house? This action cannot be undone.')) {
-      const updatedOpenHouses = openHouses.filter((house) => house.id !== houseId);
-      setOpenHouses(updatedOpenHouses);
-      openHousesStorage.set(updatedOpenHouses);
+  useEffect(() => {
+    if (createAttendanceSuccess) {
+      toast.success('Attendance registered');
+      handleCloseModal();
+      dispatch(resetCreateAttendanceFlag());
     }
+  }, [createAttendanceSuccess, dispatch]);
+
+  useEffect(() => {
+    if (createAttendanceError) {
+      const msg = typeof createAttendanceError === 'string'
+        ? createAttendanceError
+        : createAttendanceError?.message || 'Failed to register attendance';
+      toast.error(msg);
+      dispatch(resetCreateAttendanceFlag());
+    }
+  }, [createAttendanceError, dispatch]);
+
+  const handleRequestDeleteOpenHouse = (house) => {
+    setDeleteTargetHouse(house);
+  };
+
+  const handleConfirmDeleteOpenHouse = () => {
+    if (!deleteTargetHouse) return;
+    const updatedOpenHouses = openHouses.filter((house) => house.id !== deleteTargetHouse.id);
+    setOpenHouses(updatedOpenHouses);
+    openHousesStorage.set(updatedOpenHouses);
+    setDeleteTargetHouse(null);
+    toast.success('Open house deleted');
+  };
+
+  const handleCancelDeleteOpenHouse = () => {
+    setDeleteTargetHouse(null);
   };
 
   // Only the creator of an open house may edit it. We match against the
@@ -742,12 +799,12 @@ export function OpenHousePage({ navigate, currentUser }) {
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    handleDeleteOpenHouse(house.id);
+                    handleRequestDeleteOpenHouse(house);
                   }}
                   className="p-2 rounded-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-white transition-all duration-300 hover:scale-110 cursor-pointer"
                   title="Delete this open house"
                   style={{ pointerEvents: 'auto', zIndex: 9999 }}>
-                  
+
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </>
@@ -860,26 +917,47 @@ export function OpenHousePage({ navigate, currentUser }) {
 
                   {/* Actions */}
                   <div className="flex space-x-2 justify-end relative z-30">
-                    <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setSelectedOpenHouse(house);
-                    setShowAttendanceModal(true);
-                  }}
-                  className={`${viewMode === 'list' ? 'px-8' : 'flex-1 px-4'} py-3 text-white rounded-lg hover:scale-105 transition-all duration-300 font-semibold cursor-pointer shadow-lg whitespace-nowrap`}
-                  style={{
-                    pointerEvents: 'auto',
-                    zIndex: 9999,
-                    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.1))',
-                    backdropFilter: 'blur(10px)',
-                    border: '2px solid rgba(255, 255, 255, 0.4)',
-                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
-                  }}>
-                  
-                      Attend
-                    </button>
+                    {isCreator(house) ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleViewAttendees(house);
+                        }}
+                        className={`${viewMode === 'list' ? 'px-8' : 'flex-1 px-4'} py-3 text-white rounded-lg hover:scale-105 transition-all duration-300 font-semibold cursor-pointer shadow-lg whitespace-nowrap flex items-center justify-center gap-2`}
+                        style={{
+                          pointerEvents: 'auto',
+                          zIndex: 9999,
+                          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.1))',
+                          backdropFilter: 'blur(10px)',
+                          border: '2px solid rgba(255, 255, 255, 0.4)',
+                          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
+                        }}>
+                        <Users className="h-4 w-4" />
+                        Attendees
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setSelectedOpenHouse(house);
+                          setShowAttendanceModal(true);
+                        }}
+                        className={`${viewMode === 'list' ? 'px-8' : 'flex-1 px-4'} py-3 text-white rounded-lg hover:scale-105 transition-all duration-300 font-semibold cursor-pointer shadow-lg whitespace-nowrap`}
+                        style={{
+                          pointerEvents: 'auto',
+                          zIndex: 9999,
+                          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.1))',
+                          backdropFilter: 'blur(10px)',
+                          border: '2px solid rgba(255, 255, 255, 0.4)',
+                          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
+                        }}>
+                        Attend
+                      </button>
+                    )}
                     <button
                   type="button"
                   onClick={(e) => {
@@ -936,6 +1014,28 @@ export function OpenHousePage({ navigate, currentUser }) {
         openHouse={selectedOpenHouse}
         isClosing={isClosingModal}
         currentUser={currentUser} />
+
+      }
+
+      {/* Attendees List Modal (owner view) */}
+      {showAttendeesListModal && selectedOpenHouse &&
+      <AttendeesListModal
+        isOpen={showAttendeesListModal}
+        onClose={handleCloseModal}
+        openHouse={selectedOpenHouse}
+        attendees={attendeesList}
+        isLoading={attendeesLoading}
+        error={attendeesError}
+        isClosing={isClosingModal} />
+
+      }
+
+      {/* Delete confirmation modal */}
+      {deleteTargetHouse &&
+      <ConfirmDeleteModal
+        openHouse={deleteTargetHouse}
+        onCancel={handleCancelDeleteOpenHouse}
+        onConfirm={handleConfirmDeleteOpenHouse} />
 
       }
 
@@ -1463,11 +1563,14 @@ function AttendanceModal({ isOpen, onClose, onSubmit, openHouse, isClosing, curr
       const resolvedUserType = currentUser ?
       currentUser.role === 'provider' ? 'showing-agent' : currentUser.role || 'user' :
       'user';
+      const fullName = currentUser
+        ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || currentUser.name || ''
+        : '';
       setFormData({
         userType: resolvedUserType,
-        name: '',
-        email: '',
-        phone: '',
+        name: fullName,
+        email: currentUser?.email || '',
+        phone: currentUser?.phone || currentUser?.phoneNumber || '',
         numberOfAttendees: '1'
       });
     }
@@ -1629,6 +1732,194 @@ function AttendanceModal({ isOpen, onClose, onSubmit, openHouse, isClosing, curr
             </button>
           </div>
         </form>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// Normalize attendee notes for display. Older RSVPs were saved as
+// "Bringing N attendees · Role: X"; we now want "No. of attendees: N"
+// and the role badge dropped entirely.
+function formatAttendeeMessage(raw) {
+  if (!raw) return null;
+  const match = String(raw).match(/(\d+)/);
+  if (match) return `No. of attendees: ${match[1]}`;
+  const cleaned = String(raw).replace(/·?\s*Role:\s*\S+/i, '').trim();
+  return cleaned || null;
+}
+
+// Attendees List Modal — visible to the open house creator only.
+function AttendeesListModal({ isOpen, onClose, openHouse, attendees, isLoading, error, isClosing }) {
+  if (!isOpen) return null;
+
+  const list = Array.isArray(attendees) ? attendees : [];
+
+  return typeof document !== 'undefined' && createPortal(
+    <div
+      className="fixed inset-0 flex items-center justify-center p-4"
+      style={{
+        zIndex: 100000,
+        background: isClosing ? 'rgba(0, 69, 113, 0)' : 'rgba(0, 69, 113, 0.75)',
+        backdropFilter: 'blur(4px)',
+        animation: isClosing ? 'fadeOut 0.15s ease-out' : 'fadeIn 0.3s ease-out'
+      }}
+      onClick={onClose}>
+
+      <div
+        className="relative w-full max-w-2xl rounded-2xl p-6 overflow-y-auto scrollbar-hide"
+        style={{
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
+          maxHeight: '90vh',
+          animation: isClosing ? 'modalPopOut 0.15s ease-out' : 'modalPopIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)'
+        }}
+        onClick={(e) => e.stopPropagation()}>
+
+        <button
+          onClick={onClose}
+          className="absolute top-2 right-2 p-1 rounded-full hover:bg-white/20 transition-all duration-300">
+          <X className="h-4 w-4 text-white" />
+        </button>
+
+        <div className="flex items-center gap-2 mb-1">
+          <Users className="h-6 w-6 text-white" />
+          <h2 className="text-2xl text-white drop-shadow-lg">Attendees</h2>
+          <span className="ml-2 px-2 py-0.5 rounded-full text-xs text-white bg-white/15 border border-white/25">
+            {list.length}
+          </span>
+        </div>
+        <p className="text-sm text-white/80 drop-shadow-md mb-4">{openHouse?.title}</p>
+
+        {isLoading &&
+          <div className="py-8 text-center text-white">Loading attendees…</div>
+        }
+
+        {!isLoading && error &&
+          <div className="py-4 px-3 rounded-lg bg-red-500/10 border border-red-500/30 text-white text-sm">
+            {error}
+          </div>
+        }
+
+        {!isLoading && !error && list.length === 0 &&
+          <div className="py-8 text-center text-white/80">
+            No one has registered to attend yet.
+          </div>
+        }
+
+        {!isLoading && !error && list.length > 0 &&
+          <div className="space-y-3">
+            {list.map((a) => {
+              const displayName = a.name || `${a.user?.firstName || ''} ${a.user?.lastName || ''}`.trim() || 'Guest';
+              return (
+                <div
+                  key={a.id}
+                  className="p-4 rounded-xl border border-white/20"
+                  style={{ background: 'rgba(255,255,255,0.06)' }}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-white" />
+                        <span className="text-white font-semibold drop-shadow-md truncate">{displayName}</span>
+                      </div>
+                      <div className="mt-2 space-y-1 text-sm text-white/90">
+                        {a.email &&
+                          <div className="flex items-center gap-2">
+                            <Mail className="h-3.5 w-3.5" />
+                            <a href={`mailto:${a.email}`} className="hover:underline truncate">{a.email}</a>
+                          </div>
+                        }
+                        {a.phone &&
+                          <div className="flex items-center gap-2">
+                            <Phone className="h-3.5 w-3.5" />
+                            <a href={`tel:${a.phone}`} className="hover:underline">{a.phone}</a>
+                          </div>
+                        }
+                        {formatAttendeeMessage(a.message) &&
+                          <p className="text-white/80 italic">{formatAttendeeMessage(a.message)}</p>
+                        }
+                      </div>
+                    </div>
+                    {a.createdAt &&
+                      <span className="text-xs text-white/70 whitespace-nowrap">
+                        {new Date(a.createdAt).toLocaleDateString()}
+                      </span>
+                    }
+                  </div>
+                </div>);
+            })}
+          </div>
+        }
+
+        <div className="flex justify-end pt-5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2 rounded-xl border-2 border-white/30 text-white hover:bg-white/20 hover:border-white/50 transition-all duration-300 font-semibold backdrop-blur-sm">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// Styled confirmation dialog for deleting an open house.
+function ConfirmDeleteModal({ openHouse, onCancel, onConfirm }) {
+  return typeof document !== 'undefined' && createPortal(
+    <div
+      className="fixed inset-0 flex items-center justify-center p-4"
+      style={{
+        zIndex: 100000,
+        background: 'rgba(0, 69, 113, 0.75)',
+        backdropFilter: 'blur(4px)',
+        animation: 'fadeIn 0.3s ease-out'
+      }}
+      onClick={onCancel}>
+
+      <div
+        className="relative w-full max-w-md rounded-2xl p-6"
+        style={{
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
+          animation: 'modalPopIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)'
+        }}
+        onClick={(e) => e.stopPropagation()}>
+
+        <div className="flex items-start gap-3 mb-4">
+          <div
+            className="p-2 rounded-full bg-red-500/20 border border-red-500/30 flex-shrink-0">
+            <Trash2 className="h-5 w-5 text-red-300" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-xl text-white drop-shadow-lg">Delete open house?</h2>
+            <p className="text-sm text-white/80 mt-1">
+              {openHouse?.title ? `"${openHouse.title}" ` : ''}will be permanently removed. This action cannot be undone.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-5 py-2 rounded-xl border-2 border-white/30 text-white hover:bg-white/20 hover:border-white/50 transition-all duration-300 font-semibold backdrop-blur-sm">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold shadow-lg flex items-center gap-2 transition-all duration-300 border-2 border-red-700"
+            style={{ backgroundColor: '#dc2626' }}>
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </button>
+        </div>
       </div>
     </div>,
     document.body

@@ -194,12 +194,13 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
     }));
   }, [apiProfileData]);
 
-  // Load the service-types catalog once — populates the Business Details dropdown.
+  // Load the service-types catalog once — populates the Business Details dropdown
+  // for providers and the Request-Quote category dropdown for everyone.
   useEffect(() => {
-    if (isBusinessRole && (!serviceTypes || serviceTypes.length === 0)) {
+    if (!serviceTypes || serviceTypes.length === 0) {
       dispatch(fetchServiceTypesStart());
     }
-  }, [isBusinessRole, serviceTypes, dispatch]);
+  }, [serviceTypes, dispatch]);
 
   // React to update result
   useEffect(() => {
@@ -426,14 +427,12 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
     }));
   };
 
-  const handleAcceptResponse = (request) => {
-    const resp = (request.bids || request.responses || [])[0];
-    if (resp) dispatch(updateQuoteResponseStart({ id: resp.id, payload: { status: 'accepted' } }));
+  const handleAcceptResponse = (bid) => {
+    if (bid) dispatch(updateQuoteResponseStart({ id: bid.id, payload: { status: 'accepted' } }));
   };
 
-  const handleDeclineResponse = (request) => {
-    const resp = (request.bids || request.responses || [])[0];
-    if (resp) dispatch(updateQuoteResponseStart({ id: resp.id, payload: { status: 'declined' } }));
+  const handleDeclineResponse = (bid) => {
+    if (bid) dispatch(updateQuoteResponseStart({ id: bid.id, payload: { status: 'declined' } }));
   };
 
   const handleMarkDone = (request) => {
@@ -526,10 +525,17 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
     }
   }, [createReviewError, dispatch]);
 
-  // Provider-side action buttons for an incoming request, by lifecycle status.
+  // Provider-side action buttons for an incoming request. Decisions hinge on
+  // *this* provider's own response, not the parent quote.status, because a
+  // broadcast quote can be `responded`/`accepted` for another provider while
+  // still pending for me.
   const renderProviderActions = (req) => {
     const resp = (req.responses || [])[0];
-    if (req.status === 'pending') {
+    const iResponded = !!resp;
+    const myResponseAccepted = req.status === 'accepted' && iResponded;
+    const myResponseDeclined = req.status === 'declined' && iResponded;
+
+    if (!iResponded && (req.status === 'pending' || req.status === 'responded')) {
       return (
         <button
           onClick={(e) => { e.stopPropagation(); setRespondTarget(req); }}
@@ -537,10 +543,10 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
           {req.isMeetingRequest ? 'Respond' : 'Send Quote'}
         </button>);
     }
-    if (req.status === 'responded') {
+    if (iResponded && (req.status === 'pending' || req.status === 'responded')) {
       return <span className="text-sm text-white drop-shadow-md">Quote sent{resp?.amount ? ` — $${resp.amount}` : ''} · awaiting customer</span>;
     }
-    if (req.status === 'accepted' && !req.providerCompleted) {
+    if (myResponseAccepted && !req.providerCompleted) {
       return (
         <button
           onClick={(e) => { e.stopPropagation(); handleMarkDone(req); }}
@@ -548,10 +554,10 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
           Mark Work as Done
         </button>);
     }
-    if (req.status === 'accepted' && req.providerCompleted) {
+    if (myResponseAccepted && req.providerCompleted) {
       return <span className="text-sm text-white drop-shadow-md">Marked done · awaiting customer confirmation</span>;
     }
-    if (req.status === 'closed') {
+    if (req.status === 'closed' && iResponded) {
       return (
         <div className="flex items-center gap-3 flex-wrap">
           <span className="text-sm text-green-300 font-medium">Completed</span>
@@ -562,7 +568,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
           </button>
         </div>);
     }
-    if (req.status === 'declined') {
+    if (myResponseDeclined) {
       return <span className="text-sm text-red-300 drop-shadow-md">Declined by customer</span>;
     }
     return null;
@@ -570,32 +576,40 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
 
   // Customer-side action buttons for one of their quote requests, by status.
   const renderCustomerQuoteActions = (request) => {
-    const resp = (request.bids || [])[0];
+    const bids = request.bids || [];
     if (request.status === 'responded') {
+      const openBids = bids.filter((b) => !b.status || b.status === 'submitted' || b.status === 'pending');
       return (
-        <div>
-          {resp &&
-            <div className="mb-3 p-3 rounded-lg bg-white/10 border border-white/20">
-              <p className="text-sm text-white font-medium drop-shadow-md">
-                Provider's quote{resp.amount ? `: $${resp.amount}` : ''}
-              </p>
-              {resp.message &&
-                <p className="text-xs text-white mt-1 drop-shadow-md">{resp.message}</p>
-              }
-            </div>
+        <div className="space-y-3">
+          {openBids.length === 0 &&
+            <p className="text-sm text-white/80 drop-shadow-md">Awaiting a quote from the provider…</p>
           }
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleAcceptResponse(request)}
-              className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-600/90 transition-all duration-300">
-              Accept
-            </button>
-            <button
-              onClick={() => handleDeclineResponse(request)}
-              className="px-4 py-2 rounded-lg border border-white/30 text-white text-sm font-semibold hover:bg-white/20 transition-all duration-300">
-              Decline
-            </button>
-          </div>
+          {openBids.map((bid) => {
+            const providerName = bid.provider?.businessName
+              || `${bid.provider?.firstName || ''} ${bid.provider?.lastName || ''}`.trim()
+              || 'Provider';
+            return (
+              <div key={bid.id} className="p-3 rounded-lg bg-white/10 border border-white/20">
+                <p className="text-sm text-white font-medium drop-shadow-md">
+                  {providerName}'s quote{bid.amount ? `: $${bid.amount}` : ''}
+                </p>
+                {bid.message &&
+                  <p className="text-xs text-white mt-1 drop-shadow-md">{bid.message}</p>
+                }
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => handleAcceptResponse(bid)}
+                    className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-600/90 transition-all duration-300">
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => handleDeclineResponse(bid)}
+                    className="px-4 py-2 rounded-lg border border-white/30 text-white text-sm font-semibold hover:bg-white/20 transition-all duration-300">
+                    Decline
+                  </button>
+                </div>
+              </div>);
+          })}
         </div>);
     }
     if (request.status === 'accepted' && !request.providerCompleted) {
@@ -947,6 +961,19 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
 
   const renderQuotes = () =>
   <div className="space-y-8 animate-fadeIn">
+      {/* Provider-side: quoted / completed client requests */}
+      {isBusinessRole && sentIncomingRequests.length > 0 &&
+        <div>
+          <h3 className="text-xl text-white drop-shadow-lg mb-1">Sent Quotes & Completed Jobs</h3>
+          <p className="text-white/80 drop-shadow-md text-sm mb-6">
+            Client requests you've already quoted or completed.
+          </p>
+          <div className="space-y-4">
+            {sentIncomingRequests.map((req) => renderIncomingRequestCard(req))}
+          </div>
+        </div>
+      }
+
       {/* Quote Requests */}
       <div>
         <div className="flex items-center justify-between mb-6">
@@ -1119,6 +1146,96 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
     boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
   };
 
+  // Split by *my* participation, not the parent quote.status: a broadcast
+  // quote that another provider has already quoted still belongs in my
+  // Client Requests until I respond too.
+  const pendingIncomingRequests = incomingRequests.filter((r) => (r.responses || []).length === 0);
+  const sentIncomingRequests = incomingRequests.filter((r) => (r.responses || []).length > 0);
+
+  const renderIncomingRequestCard = (req) => {
+    // The badge must reflect *my* state: if I haven't responded, the quote
+    // is still pending for me even if a peer provider has quoted it.
+    const iResponded = (req.responses || []).length > 0;
+    const effectiveStatus = iResponded ? req.status : 'pending';
+    return (
+    <div
+      key={req.id}
+      onClick={() => setDetailRequest(req)}
+      className="rounded-2xl p-6 relative overflow-hidden cursor-pointer transition-transform duration-200 hover:-translate-y-0.5"
+      style={glassPanelStyle}>
+      <div className="flex justify-between items-start mb-4 gap-4">
+        <div>
+          <h4 className="text-lg text-white font-medium drop-shadow-md">{req.name}</h4>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-white/90 drop-shadow-md">
+            {req.email &&
+              <span className="flex items-center"><Mail className="h-3 w-3 mr-1" />{req.email}</span>
+            }
+            {req.phone &&
+              <span className="flex items-center"><Phone className="h-3 w-3 mr-1" />{req.phone}</span>
+            }
+          </div>
+        </div>
+        <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize whitespace-nowrap ${
+          effectiveStatus === 'pending' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' :
+          effectiveStatus === 'accepted' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
+          effectiveStatus === 'declined' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
+          'bg-white/20 text-white border border-white/30'}`
+        }>
+          {statusLabel(effectiveStatus)}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 mb-4 text-sm text-white drop-shadow-md">
+        {req.category &&
+          <div><span className="text-white/70">Service:</span> {req.category}</div>
+        }
+        {req.propertyType &&
+          <div><span className="text-white/70">Property:</span> {req.propertyType}</div>
+        }
+        {req.location &&
+          <div className="flex items-center"><MapPin className="h-4 w-4 mr-1" />{req.location}</div>
+        }
+        {(req.budgetMin || req.budgetMax) &&
+          <div>
+            <span className="text-white/70">Budget:</span> ${req.budgetMin}{req.budgetMax ? ` - $${req.budgetMax}` : '+'}
+          </div>
+        }
+      </div>
+
+      {req.description &&
+        <p className="text-sm text-white/90 drop-shadow-md mb-4 leading-relaxed">{req.description}</p>
+      }
+
+      {req.photos.length > 0 &&
+        <div className="flex flex-wrap gap-2 mb-4">
+          {req.photos.map((photo, idx) =>
+            <img
+              key={idx}
+              src={photo}
+              alt={`Attachment ${idx + 1}`}
+              className="w-16 h-16 object-cover rounded-md border border-white/20" />
+          )}
+        </div>
+      }
+
+      <div className="mb-4" onClick={(e) => e.stopPropagation()}>
+        {renderProviderActions(req)}
+      </div>
+
+      <div className="flex items-center justify-between text-xs text-white/70 drop-shadow-md pt-3 border-t border-white/20">
+        <span className="flex items-center">
+          <Calendar className="h-3 w-3 mr-1" />
+          {req.createdAt ? new Date(req.createdAt).toLocaleString() : ''}
+        </span>
+        {req.isMeetingRequest &&
+          <span className="px-2 py-0.5 rounded-full bg-sky-blue/20 border border-sky-blue/30 text-white">
+            Meeting Request
+          </span>
+        }
+      </div>
+    </div>);
+  };
+
   const renderIncomingRequests = () =>
   <div className="space-y-6 animate-fadeIn">
       <div>
@@ -1128,105 +1245,28 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
         <p className="text-white/80 drop-shadow-md text-sm">
           {currentUser?.role === 'realtor' ?
         'Meeting requests submitted to you by users' :
-        'Quote requests submitted to you by users'}
+        'New quote requests waiting for your response'}
         </p>
       </div>
 
-      {incomingQuotesLoading && incomingRequests.length === 0 &&
+      {incomingQuotesLoading && pendingIncomingRequests.length === 0 &&
     <div className="rounded-2xl p-8 text-center relative overflow-hidden" style={glassPanelStyle}>
           <p className="text-white drop-shadow-md">Loading requests…</p>
         </div>
     }
 
-      {!incomingQuotesLoading && incomingRequests.length === 0 &&
+      {!incomingQuotesLoading && pendingIncomingRequests.length === 0 &&
     <div className="rounded-2xl p-8 text-center relative overflow-hidden" style={glassPanelStyle}>
-          <p className="text-white drop-shadow-md">No requests yet</p>
+          <p className="text-white drop-shadow-md">No new requests</p>
           <p className="text-white/70 drop-shadow-md text-sm mt-1">
-            New requests submitted by users will appear here.
+            New requests submitted by users will appear here. Already-quoted and completed jobs live in the Quotes tab.
           </p>
         </div>
     }
 
-      {incomingRequests.length > 0 &&
+      {pendingIncomingRequests.length > 0 &&
     <div className="space-y-4">
-          {incomingRequests.map((req) =>
-      <div
-        key={req.id}
-        onClick={() => setDetailRequest(req)}
-        className="rounded-2xl p-6 relative overflow-hidden cursor-pointer transition-transform duration-200 hover:-translate-y-0.5"
-        style={glassPanelStyle}>
-              <div className="flex justify-between items-start mb-4 gap-4">
-                <div>
-                  <h4 className="text-lg text-white font-medium drop-shadow-md">{req.name}</h4>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-white/90 drop-shadow-md">
-                    {req.email &&
-              <span className="flex items-center"><Mail className="h-3 w-3 mr-1" />{req.email}</span>
-              }
-                    {req.phone &&
-              <span className="flex items-center"><Phone className="h-3 w-3 mr-1" />{req.phone}</span>
-              }
-                  </div>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize whitespace-nowrap ${
-          req.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' :
-          req.status === 'accepted' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
-          req.status === 'declined' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
-          'bg-white/20 text-white border border-white/30'}`
-          }>
-                  {statusLabel(req.status)}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 mb-4 text-sm text-white drop-shadow-md">
-                {req.category &&
-          <div><span className="text-white/70">Service:</span> {req.category}</div>
-          }
-                {req.propertyType &&
-          <div><span className="text-white/70">Property:</span> {req.propertyType}</div>
-          }
-                {req.location &&
-          <div className="flex items-center"><MapPin className="h-4 w-4 mr-1" />{req.location}</div>
-          }
-                {(req.budgetMin || req.budgetMax) &&
-          <div>
-                    <span className="text-white/70">Budget:</span> ${req.budgetMin}{req.budgetMax ? ` - $${req.budgetMax}` : '+'}
-                  </div>
-          }
-              </div>
-
-              {req.description &&
-        <p className="text-sm text-white/90 drop-shadow-md mb-4 leading-relaxed">{req.description}</p>
-        }
-
-              {req.photos.length > 0 &&
-        <div className="flex flex-wrap gap-2 mb-4">
-                  {req.photos.map((photo, idx) =>
-          <img
-            key={idx}
-            src={photo}
-            alt={`Attachment ${idx + 1}`}
-            className="w-16 h-16 object-cover rounded-md border border-white/20" />
-          )}
-                </div>
-        }
-
-              <div className="mb-4" onClick={(e) => e.stopPropagation()}>
-                {renderProviderActions(req)}
-              </div>
-
-              <div className="flex items-center justify-between text-xs text-white/70 drop-shadow-md pt-3 border-t border-white/20">
-                <span className="flex items-center">
-                  <Calendar className="h-3 w-3 mr-1" />
-                  {req.createdAt ? new Date(req.createdAt).toLocaleString() : ''}
-                </span>
-                {req.isMeetingRequest &&
-          <span className="px-2 py-0.5 rounded-full bg-sky-blue/20 border border-sky-blue/30 text-white">
-                  Meeting Request
-                </span>
-          }
-              </div>
-            </div>
-      )}
+          {pendingIncomingRequests.map((req) => renderIncomingRequestCard(req))}
         </div>
     }
     </div>;
@@ -1246,7 +1286,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
       const cfg = SHOW_STATUS[req.status] || SHOW_STATUS.pending;
       const isAssignedToMe = req.assignedAgentId === currentUser?.id;
       return (
-        <div key={req.id} className="rounded-2xl p-5 relative overflow-hidden" style={glassPanelStyle}>
+        <div key={req.id} className="rounded-2xl p-5 relative overflow-hidden flex flex-col h-full" style={glassPanelStyle}>
           <div className="flex justify-between items-start gap-4 mb-3">
             <div className="min-w-0">
               <h4 className="text-lg text-white font-semibold drop-shadow-md truncate">
@@ -1300,7 +1340,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
             <p className="text-xs text-white/80 mb-3">Posted by {req.user.firstName} {req.user.lastName}</p>
           }
           {isRealtor &&
-            <div className="flex gap-2 pt-3 border-t border-white/20">
+            <div className="flex gap-2 pt-3 border-t border-white/20 mt-auto">
               {mode === 'available' &&
                 <button
                   onClick={() => handleClaimShowing(req)}
@@ -1332,7 +1372,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
       <div className="space-y-8 animate-fadeIn">
         <div>
           <h3 className="text-xl text-white drop-shadow-lg mb-1">
-            {isRealtor ? 'Showing Jobs' : 'My Property Showings'}
+            {isRealtor ? 'Opportunity' : 'My Property Showings'}
           </h3>
           <p className="text-white drop-shadow-md text-sm">
             {isRealtor
@@ -1454,7 +1494,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
             []),
             // Customer: "My Showings". Realtor: "Showing Jobs" (browse + claim).
             ...(currentUser?.role === 'realtor'
-              ? [{ id: 'showings', label: 'Showing Jobs', icon: Building }]
+              ? [{ id: 'showings', label: 'Opportunity', icon: Building }]
               : [{ id: 'showings', label: 'My Showings', icon: Building }]),
             { id: 'settings', label: 'Settings', icon: Edit3 }].
             map((tab) => {
@@ -2004,6 +2044,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
         isOpen={showQuoteModal}
         onClose={() => setShowQuoteModal(false)}
         onSubmit={handleQuoteSubmit}
+        categoryOptions={(serviceTypes || []).map((t) => t.name).filter(Boolean)}
         currentUser={currentUser} />
 
       {/* Request details modal — opened from the Meeting / Client Requests cards */}

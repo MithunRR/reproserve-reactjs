@@ -1,14 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useDispatch, useSelector } from 'react-redux';
 import { X, Upload, FileText, MapPin, DollarSign, List, User, Mail, Phone, Home } from 'lucide-react';
-
-const DEFAULT_CATEGORIES = [
-  'Construction & Renovation',
-  'Repairs & Maintenance',
-  'Outdoor & Landscaping',
-  'Home Services & Lifestyle',
-  'Professional & Legal Services'
-];
+import { fetchServiceTypesStart } from '../Store/Features/Authentication/authslice';
 
 export function QuoteRequestModal({
   isOpen,
@@ -23,6 +17,17 @@ export function QuoteRequestModal({
   currentUser = null,
   isMeetingRequest = false
 }) {
+  const dispatch = useDispatch();
+  const { serviceTypes, serviceTypesLoading } = useSelector((state) => state.AuthReducer);
+
+  // The category list lives in the `service_types` table. Fetch once on mount
+  // so every consumer of this modal gets the DB-driven list without each page
+  // having to wire it up. Consumers may still override via `categoryOptions`.
+  useEffect(() => {
+    if (!serviceTypes || serviceTypes.length === 0) {
+      dispatch(fetchServiceTypesStart());
+    }
+  }, [dispatch, serviceTypes]);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -40,9 +45,13 @@ export function QuoteRequestModal({
   // Memoised so the prefill effect below keeps a stable dependency. Previously
   // this was a fresh array every render, which re-ran the effect on every
   // keystroke and reset the form — making the inputs impossible to type into.
+  const dbCategories = useMemo(
+    () => (Array.isArray(serviceTypes) ? serviceTypes.map((t) => t?.name).filter(Boolean) : []),
+    [serviceTypes]
+  );
   const resolvedCategories = useMemo(
-    () => (Array.isArray(categoryOptions) && categoryOptions.length > 0 ? categoryOptions : DEFAULT_CATEGORIES),
-    [categoryOptions]
+    () => (Array.isArray(categoryOptions) && categoryOptions.length > 0 ? categoryOptions : dbCategories),
+    [categoryOptions, dbCategories]
   );
 
   useEffect(() => {
@@ -309,7 +318,9 @@ export function QuoteRequestModal({
                 className="w-full pl-10 pr-4 py-2 rounded-md border-2 border-white/30 bg-white/10 backdrop-blur-sm text-white focus:outline-none focus:border-white/60"
                 required>
                 
-                <option value="" className="bg-dark-blue">Select a category</option>
+                <option value="" className="bg-dark-blue">
+                  {serviceTypesLoading && resolvedCategories.length === 0 ? 'Loading categories…' : 'Select a category'}
+                </option>
                 {resolvedCategories.map((cat) =>
                 <option key={cat} value={cat} className="bg-dark-blue">{cat}</option>
                 )}
