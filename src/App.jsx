@@ -10,6 +10,8 @@ import { FindProvidersPage } from './components/FindProvidersPage';
 import { RealtorsPage } from './components/RealtorsPage';
 import { ServiceProvidersPage } from './components/ServiceProvidersPage';
 import { LoginPage } from './components/LoginPage';
+import { AdminLoginPage } from './components/AdminLoginPage';
+import { AdminDashboard } from './components/AdminDashboard';
 import { RegisterPage } from './components/RegisterPage';
 import { VerifyEmailPage } from './components/VerifyEmailPage';
 import { AboutPage } from './components/AboutPage';
@@ -181,6 +183,15 @@ function AppContent() {
           <Route path="/realtors" element={<RealtorsPage navigate={navigate} currentUser={currentUser} />} />
           <Route path="/service-providers" element={<ServiceProvidersPage navigate={navigate} currentUser={currentUser} />} />
           <Route path="/login" element={<LoginPage navigate={navigate} setCurrentUser={setCurrentUser} />} />
+          <Route path="/admin/login" element={<AdminLoginPage navigate={navigate} setCurrentUser={setCurrentUser} />} />
+          <Route
+            path="/admin"
+            element={
+              currentUser?.role === 'admin'
+                ? <AdminDashboard navigate={navigate} currentUser={currentUser} setCurrentUser={setCurrentUser} />
+                : <AdminLoginPage navigate={navigate} setCurrentUser={setCurrentUser} />
+            }
+          />
           <Route path="/register" element={<RegisterPage navigate={navigate} setCurrentUser={setCurrentUser} />} />
           <Route path="/verify-email" element={<VerifyEmailPage navigate={navigate} setCurrentUser={setCurrentUser} />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage navigate={navigate} />} />

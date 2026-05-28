@@ -1,16 +1,19 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
 import {
   Users, Briefcase, Home, ShieldCheck, FileText, Building,
   CalendarDays, Star, TrendingUp, LogOut, MessageSquare, Mail, Phone,
-  Check, Trash2, X
+  Check, Trash2, X, MapPin, BadgeCheck, FileBadge, UserCheck, Clock
 } from 'lucide-react';
 import {
   fetchAdminStatsStart, logout,
   fetchContactMessagesStart,
   updateContactStatusStart,
-  deleteContactMessageStart
+  deleteContactMessageStart,
+  fetchPendingApprovalsStart,
+  setApprovalStart
 } from '../Store/Features/Authentication/authslice';
 import { currentUserStorage } from '../utils/localStorage';
 
@@ -20,14 +23,25 @@ export function AdminDashboard({ navigate, currentUser, setCurrentUser }) {
   const dispatch = useDispatch();
   const {
     adminStats, adminStatsLoading, adminStatsError,
-    contactMessages, contactMessagesLoading
+    contactMessages, contactMessagesLoading,
+    pendingProviders, pendingRealtors, pendingApprovalsLoading,
+    pendingApprovalsError, setApprovalLoadingId
   } = useSelector((s) => s.AuthReducer);
   const [openMessage, setOpenMessage] = useState(null); // {id, name, ...} | null
+  const [openPending, setOpenPending] = useState(null); // user record | null
 
   useEffect(() => {
     dispatch(fetchAdminStatsStart());
     dispatch(fetchContactMessagesStart());
+    dispatch(fetchPendingApprovalsStart());
   }, [dispatch]);
+
+  const decide = (user, status) => {
+    const label = status === 'approved' ? 'approve' : 'reject';
+    if (!window.confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} ${user.firstName || ''} ${user.lastName || ''}?`)) return;
+    dispatch(setApprovalStart({ id: user.id, status }));
+    if (openPending?.id === user.id) setOpenPending(null);
+  };
 
   // Mark as read when an unread message is opened.
   useEffect(() => {
@@ -171,6 +185,44 @@ export function AdminDashboard({ navigate, currentUser, setCurrentUser }) {
                   }))} />
               </Panel>
 
+              {/* Pending Service Providers — awaiting admin approval */}
+              <Panel className="lg:col-span-2">
+                <PendingHeader
+                  icon={Briefcase}
+                  title="Pending Service Providers"
+                  count={pendingProviders?.length || 0}
+                  loading={pendingApprovalsLoading}
+                  onRefresh={() => dispatch(fetchPendingApprovalsStart())}
+                />
+                <PendingError error={pendingApprovalsError} />
+                <PendingList
+                  rows={pendingProviders}
+                  emptyText="No service providers awaiting approval."
+                  onOpen={setOpenPending}
+                  onDecide={decide}
+                  setApprovalLoadingId={setApprovalLoadingId}
+                />
+              </Panel>
+
+              {/* Pending Realtors — awaiting admin approval */}
+              <Panel className="lg:col-span-2">
+                <PendingHeader
+                  icon={Home}
+                  title="Pending Realtors"
+                  count={pendingRealtors?.length || 0}
+                  loading={pendingApprovalsLoading}
+                  onRefresh={() => dispatch(fetchPendingApprovalsStart())}
+                />
+                <PendingError error={pendingApprovalsError} />
+                <PendingList
+                  rows={pendingRealtors}
+                  emptyText="No realtors awaiting approval."
+                  onOpen={setOpenPending}
+                  onDecide={decide}
+                  setApprovalLoadingId={setApprovalLoadingId}
+                />
+              </Panel>
+
               {/* Contact Messages — full table with row actions, fed by
                   /api/contact (separate from the /admin/stats summary). */}
               <Panel className="lg:col-span-2">
@@ -255,14 +307,16 @@ export function AdminDashboard({ navigate, currentUser, setCurrentUser }) {
               </Panel>
             </div>
 
-            {/* Message-detail modal */}
-            {openMessage &&
+            {/* Message-detail modal — portalled to document.body. items-start
+                + top padding keeps the panel below the fixed Header (z-50);
+                inline zIndex beats any stacking context. */}
+            {openMessage && typeof document !== 'undefined' && createPortal(
               <div
-                className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-                style={{ background: 'rgba(0, 69, 113, 0.75)', backdropFilter: 'blur(4px)' }}
+                className="fixed inset-0 flex items-start justify-center p-4 pt-24 overflow-y-auto"
+                style={{ background: 'rgba(0, 69, 113, 0.75)', backdropFilter: 'blur(4px)', zIndex: 999999 }}
                 onClick={() => setOpenMessage(null)}>
                 <div
-                  className="relative w-full max-w-lg rounded-2xl p-6"
+                  className="relative w-full max-w-lg rounded-2xl p-6 pt-10 my-auto"
                   style={{
                     background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
                     backdropFilter: 'blur(20px)',
@@ -272,7 +326,7 @@ export function AdminDashboard({ navigate, currentUser, setCurrentUser }) {
                   onClick={(e) => e.stopPropagation()}>
                   <button
                     onClick={() => setOpenMessage(null)}
-                    className="absolute top-2 right-2 p-1 rounded-full hover:bg-white/20 transition-colors">
+                    className="absolute top-2 right-2 p-1.5 rounded-full bg-white/10 hover:bg-white/25 border border-white/20 transition-colors">
                     <X className="h-4 w-4 text-white" />
                   </button>
                   <h3 className="text-xl text-white drop-shadow-lg mb-1">{openMessage.name}</h3>
@@ -303,8 +357,89 @@ export function AdminDashboard({ navigate, currentUser, setCurrentUser }) {
                     </button>
                   </div>
                 </div>
-              </div>
-            }
+              </div>,
+              document.body
+            )}
+
+            {/* Pending-approval detail modal — portalled to document.body. The
+                wrapper uses items-start + top padding so the panel naturally
+                sits BELOW the fixed Header (z-50), and inline zIndex makes
+                sure no other stacking context can outrank it. */}
+            {openPending && typeof document !== 'undefined' && createPortal(
+              <div
+                className="fixed inset-0 flex items-start justify-center p-4 pt-24 overflow-y-auto"
+                style={{ background: 'rgba(0, 69, 113, 0.75)', backdropFilter: 'blur(4px)', zIndex: 999999 }}
+                onClick={() => setOpenPending(null)}>
+                <div
+                  className="relative w-full max-w-2xl rounded-2xl p-6 pt-10 my-auto"
+                  style={panelStyle}
+                  onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => setOpenPending(null)}
+                    className="absolute top-2 right-2 p-1.5 rounded-full bg-white/10 hover:bg-white/25 border border-white/20 transition-colors">
+                    <X className="h-4 w-4 text-white" />
+                  </button>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Clock className="h-4 w-4 text-yellow-300" />
+                    <span className="text-xs uppercase tracking-wider text-yellow-300">Pending approval</span>
+                  </div>
+                  <h3 className="text-xl text-white drop-shadow-lg mb-1">
+                    {openPending.businessName ||
+                      `${openPending.firstName || ''} ${openPending.lastName || ''}`.trim() ||
+                      openPending.email}
+                  </h3>
+                  <p className="text-sm text-white/80 mb-4">
+                    {prettyRole(openPending.role)} · Applied {fmt(openPending.createdAt)}
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-white pt-3 border-t border-white/15">
+                    <DetailRow label="Full name"   value={`${openPending.firstName || ''} ${openPending.lastName || ''}`.trim() || '—'} />
+                    <DetailRow label="Email"       value={openPending.email || '—'} icon={Mail} />
+                    <DetailRow label="Phone"       value={openPending.phone || '—'} icon={Phone} />
+                    <DetailRow label="Register as" value={openPending.registerAs || '—'} capitalize />
+                    <DetailRow label="Business name" value={openPending.businessName || '—'} />
+                    <DetailRow label="Service type"  value={openPending.serviceType?.name || '—'} />
+                    <DetailRow label="Licence #"     value={openPending.licenseNumber || '—'} icon={FileBadge} />
+                    <DetailRow label="Email verified" value={openPending.emailVerified ? 'Yes' : 'No'} />
+                  </div>
+
+                  <div className="pt-4 border-t border-white/15 mt-4">
+                    <div className="text-xs text-white/70 mb-1">Address</div>
+                    <p className="text-sm text-white flex items-start gap-2">
+                      <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <span>
+                        {[openPending.streetAddress, openPending.city, openPending.state, openPending.zipCode]
+                          .filter(Boolean).join(', ') || '—'}
+                      </span>
+                    </p>
+                  </div>
+
+                  {openPending.businessDesc &&
+                    <div className="pt-4 border-t border-white/15 mt-4">
+                      <div className="text-xs text-white/70 mb-1">Business description</div>
+                      <p className="text-sm text-white whitespace-pre-line leading-relaxed">{openPending.businessDesc}</p>
+                    </div>
+                  }
+
+                  <div className="flex justify-end gap-2 pt-5">
+                    <button
+                      disabled={setApprovalLoadingId === openPending.id}
+                      onClick={() => decide(openPending, 'rejected')}
+                      className="px-4 py-2 rounded-lg bg-white/10 border-2 border-red-300/60 text-white text-sm font-medium hover:bg-red-500/25 hover:border-red-300 transition-all disabled:opacity-60">
+                      Reject
+                    </button>
+                    <button
+                      disabled={setApprovalLoadingId === openPending.id}
+                      onClick={() => decide(openPending, 'approved')}
+                      className="px-4 py-2 rounded-lg bg-coral-orange text-black text-sm font-semibold hover:bg-coral-orange/90 transition-all disabled:opacity-60 flex items-center gap-1">
+                      <BadgeCheck className="h-4 w-4" />
+                      Approve
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )}
           </>
         }
       </div>
@@ -407,4 +542,99 @@ function fmt(iso) {
   if (!iso) return '';
   try { return new Date(iso).toLocaleString(); }
   catch (_) { return ''; }
+}
+
+// ── Pending-approval helpers ─────────────────────────────────────────
+function PendingHeader({ icon: Icon, title, count, loading, onRefresh }) {
+  return (
+    <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+      <h2 className="text-lg text-white drop-shadow-lg flex items-center gap-2">
+        <Icon className="h-5 w-5" /> {title}
+        <span className="text-sm text-white/80">({count})</span>
+        {loading && <span className="text-[11px] text-white/70">refreshing…</span>}
+      </h2>
+      <button
+        onClick={onRefresh}
+        className="text-xs text-white hover:text-white px-3 py-1 rounded-md border border-white/30 hover:bg-white/10 transition-colors">
+        Refresh
+      </button>
+    </div>
+  );
+}
+
+function PendingError({ error }) {
+  if (!error) return null;
+  return <p className="text-red-300 text-sm mb-2">Failed to load: {String(error)}</p>;
+}
+
+function PendingList({ rows, emptyText, onOpen, onDecide, setApprovalLoadingId }) {
+  if (!rows || rows.length === 0) {
+    return <p className="text-white drop-shadow-md text-sm">{emptyText}</p>;
+  }
+  return (
+    <ul className="divide-y divide-white/15">
+      {rows.map((u) =>
+        <li
+          key={u.id}
+          onClick={() => onOpen(u)}
+          className="py-3 flex items-start gap-3 cursor-pointer hover:bg-white/5 transition-colors px-2 -mx-2 rounded">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="text-white font-medium drop-shadow-md truncate">
+                {u.businessName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email}
+              </div>
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
+                PENDING
+              </span>
+              {u.registerAs &&
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-white/10 text-white/80 border border-white/20 capitalize">
+                  {u.registerAs}
+                </span>
+              }
+            </div>
+            <div className="text-xs text-white/80 mt-0.5 flex items-center gap-3 flex-wrap">
+              <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{u.email}</span>
+              {u.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{u.phone}</span>}
+              {u.serviceType?.name && <span className="text-white/70">· {u.serviceType.name}</span>}
+              {u.city && <span className="text-white/60">· {u.city}{u.state ? `, ${u.state}` : ''}</span>}
+            </div>
+            {u.businessDesc &&
+              <div className="text-sm text-white/90 mt-1 line-clamp-2">{u.businessDesc}</div>
+            }
+          </div>
+          <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+            <span className="text-[10px] text-white whitespace-nowrap">{fmt(u.createdAt)}</span>
+            <div className="flex items-center gap-1 mt-1">
+              <button
+                title="Approve"
+                disabled={setApprovalLoadingId === u.id}
+                onClick={() => onDecide(u, 'approved')}
+                className="p-1 rounded hover:bg-green-500/20 transition-colors disabled:opacity-50">
+                <Check className="h-4 w-4 text-green-300" />
+              </button>
+              <button
+                title="Reject"
+                disabled={setApprovalLoadingId === u.id}
+                onClick={() => onDecide(u, 'rejected')}
+                className="p-1 rounded hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                <X className="h-4 w-4 text-red-300" />
+              </button>
+            </div>
+          </div>
+        </li>
+      )}
+    </ul>
+  );
+}
+
+function DetailRow({ label, value, icon: Icon, capitalize }) {
+  return (
+    <div>
+      <div className="text-xs text-white/70">{label}</div>
+      <div className={`flex items-center gap-1 ${capitalize ? 'capitalize' : ''}`}>
+        {Icon && <Icon className="h-3.5 w-3.5" />}
+        <span className="break-all">{value}</span>
+      </div>
+    </div>
+  );
 }

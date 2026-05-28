@@ -200,7 +200,10 @@ export function RegisterPage({ navigate, setCurrentUser }) {
     setFormData((prev) => ({
       ...prev,
       userType: typeValue,
-      serviceType: '' // Clear service type when switching user types
+      serviceType: '', // Clear service type when switching user types
+      // "Register as" only matters for provider/realtor — force individual
+      // for plain users so the payload always carries a valid value.
+      registerAs: typeValue === 'user' ? 'individual' : prev.registerAs
     }));
   };
 
@@ -276,11 +279,13 @@ const validateForm = () => {
     newErrors.zipCode = "Zip code is required";
   }
 
-  // Provider / Realtor Validation
-  if (
-    formData.userType === "provider" ||
-    formData.userType === "realtor"
-  ) {
+  // Business details are required only when a provider/realtor signs up
+  // as a Business. Individual provider/realtor accounts skip these.
+  const isBusinessSignup =
+    (formData.userType === "provider" || formData.userType === "realtor") &&
+    formData.registerAs === "business";
+
+  if (isBusinessSignup) {
     if (!formData.businessName.trim()) {
       newErrors.businessName = "Business name is required";
     }
@@ -328,10 +333,11 @@ const handleSubmit = (e) => {
     zipCode: formData.zipCode
   };
 
-  if (
-    formData.userType === "provider" ||
-    formData.userType === "realtor"
-  ) {
+  const includeBusinessFields =
+    (formData.userType === "provider" || formData.userType === "realtor") &&
+    formData.registerAs === "business";
+
+  if (includeBusinessFields) {
     payload = {
       ...payload,
       businessName: formData.businessName,
@@ -457,33 +463,6 @@ useEffect(() => {
             <p className="text-white drop-shadow-md"></p>
           </div>
 
-          {/* Register as — Individual or Business */}
-          <div className="mb-6">
-            <label className="block text-sm text-white mb-2 drop-shadow-md">Register as -</label>
-            <div className="flex flex-wrap gap-6">
-              <label className="flex items-center space-x-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="registerAs"
-                  value="individual"
-                  checked={formData.registerAs === 'individual'}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 accent-coral-orange cursor-pointer" />
-                <span className="text-white drop-shadow-md">Individual</span>
-              </label>
-              <label className="flex items-center space-x-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="registerAs"
-                  value="business"
-                  checked={formData.registerAs === 'business'}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 accent-coral-orange cursor-pointer" />
-                <span className="text-white drop-shadow-md">Business</span>
-              </label>
-            </div>
-          </div>
-
           {/* Account Type Selection */}
           <div className="mb-6">
             <label className="block text-sm text-white mb-2 drop-shadow-md">I am a:</label>
@@ -541,6 +520,35 @@ useEffect(() => {
               </Tabs>
             </div>
           </div>
+
+          {/* Register as — only relevant for provider/realtor signups */}
+          {formData.userType !== 'user' &&
+            <div className="mb-6">
+              <label className="block text-sm text-white mb-2 drop-shadow-md">Register as -</label>
+              <div className="flex flex-wrap gap-6">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="registerAs"
+                    value="individual"
+                    checked={formData.registerAs === 'individual'}
+                    onChange={handleInputChange}
+                    className="w-4 h-4 accent-coral-orange cursor-pointer" />
+                  <span className="text-white drop-shadow-md">Individual</span>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="registerAs"
+                    value="business"
+                    checked={formData.registerAs === 'business'}
+                    onChange={handleInputChange}
+                    className="w-4 h-4 accent-coral-orange cursor-pointer" />
+                  <span className="text-white drop-shadow-md">Business</span>
+                </label>
+              </div>
+            </div>
+          }
 
           {/* Form */}
           <div className="relative">
@@ -764,8 +772,9 @@ useEffect(() => {
                 </div>
               </div>
 
-              {/* Business Fields (Provider and Realtor) */}
+              {/* Business Fields — only when signing up as a Business */}
               {(formData.userType === 'provider' || formData.userType === 'realtor') &&
+               formData.registerAs === 'business' &&
                 <div className="space-y-6">
                   <div>
                     <label htmlFor="businessName" className="block text-sm text-white mb-2 drop-shadow-md">
