@@ -63,8 +63,10 @@
       // To hit the live server instead, set VITE_API_BASE_URL in .env.local —
       // axios will then use absolute URLs and skip this proxy entirely.
       proxy: {
-        '/api':    { target: 'http://localhost:3000', changeOrigin: true, secure: false },
-        '/assets': { target: 'http://localhost:3000', changeOrigin: true, secure: false },
+        '/api':       { target: 'http://localhost:3000', changeOrigin: true, secure: false },
+        '/assets':    { target: 'http://localhost:3000', changeOrigin: true, secure: false },
+        // Socket.IO uses HTTP long-polling and an upgraded WebSocket — both go through here.
+        '/socket.io': { target: 'http://localhost:3000', changeOrigin: true, secure: false, ws: true },
       },
     },
   });

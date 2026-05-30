@@ -1,8 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
 import { createPortal } from 'react-dom';
 import { ArrowUp } from 'lucide-react';
 import { currentUserStorage } from './utils/localStorage';
+import { connectSocket, disconnectSocket, onSocket } from './services/socket';
+import {
+  receiveLiveMessage,
+  receiveLiveNotification,
+  fetchConversationsStart,
+  fetchMessagesUnreadStart
+} from './Store/Features/Authentication/authslice';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { HomePage } from './components/HomePage';
@@ -41,7 +49,31 @@ function AppContent() {
   });
   const navigate = useNavigate();
   const location = useLocation();
+  const dispatch = useDispatch();
   const [showScrollToTop, setShowScrollToTop] = useState(false);
+
+  // Live chat socket lifecycle — connect when the user logs in, disconnect on
+  // logout, route incoming `message:new` events to the redux store.
+  useEffect(() => {
+    if (!currentUser?.id) {
+      disconnectSocket();
+      return undefined;
+    }
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    if (!token) return undefined;
+
+    connectSocket(token);
+    dispatch(fetchConversationsStart());
+    dispatch(fetchMessagesUnreadStart());
+
+    const offMessage = onSocket('message:new', (message) => {
+      dispatch(receiveLiveMessage({ message, me: currentUser.id }));
+    });
+    const offNotification = onSocket('notification:new', (notification) => {
+      dispatch(receiveLiveNotification(notification));
+    });
+    return () => { offMessage(); offNotification(); };
+  }, [currentUser?.id, dispatch]);
 
   // Save current user to localStorage whenever it changes
   useEffect(() => {

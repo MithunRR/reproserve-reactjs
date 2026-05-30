@@ -23,6 +23,7 @@ import {
     fetchConversationsStart, fetchConversationsSuccess, fetchConversationsFailed,
     fetchMessagesStart, fetchMessagesSuccess, fetchMessagesFailed,
     sendMessageStart, sendMessageSuccess, sendMessageFailed,
+    fetchMessagesUnreadStart, fetchMessagesUnreadSuccess, fetchMessagesUnreadFailed,
 
     fetchProjectsStart, fetchProjectsSuccess, fetchProjectsFailed,
     createProjectStart, createProjectSuccess, createProjectFailed,
@@ -492,9 +493,9 @@ function* updateQuoteResponseSaga(action) {
 
 // ── Messages ────────────────────────────────────────────────────────
 
-function* fetchConversationsSaga(action) {
+function* fetchConversationsSaga() {
     try {
-        const response = yield call(axios.get, `${baseUrl}/messages/conversations`, { params: action.payload || {} });
+        const response = yield call(axios.get, `${baseUrl}/messages/conversations`, authHeaders());
         if (response.status === 200) {
             yield put(fetchConversationsSuccess(response.data));
         } else {
@@ -507,7 +508,10 @@ function* fetchConversationsSaga(action) {
 
 function* fetchMessagesSaga(action) {
     try {
-        const response = yield call(axios.get, `${baseUrl}/messages`, { params: action.payload || {} });
+        const response = yield call(axios.get, `${baseUrl}/messages`, {
+            ...authHeaders(),
+            params: action.payload || {}
+        });
         if (response.status === 200) {
             yield put(fetchMessagesSuccess(response.data));
         } else {
@@ -520,7 +524,7 @@ function* fetchMessagesSaga(action) {
 
 function* sendMessageSaga(action) {
     try {
-        const response = yield call(axios.post, `${baseUrl}/messages`, action.payload, jsonHeaders);
+        const response = yield call(axios.post, `${baseUrl}/messages`, action.payload, authHeaders());
         if (isOk(response)) {
             yield put(sendMessageSuccess(response.data));
         } else {
@@ -528,6 +532,19 @@ function* sendMessageSaga(action) {
         }
     } catch (error) {
         yield put(sendMessageFailed(extractErrorMessage(error, 'Failed to send message')));
+    }
+}
+
+function* fetchMessagesUnreadSaga() {
+    try {
+        const response = yield call(axios.get, `${baseUrl}/messages/unread-count`, authHeaders());
+        if (response.status === 200) {
+            yield put(fetchMessagesUnreadSuccess(response.data));
+        } else {
+            yield put(fetchMessagesUnreadFailed(response.data?.message || 'Failed'));
+        }
+    } catch (error) {
+        yield put(fetchMessagesUnreadFailed(extractErrorMessage(error, 'Failed')));
     }
 }
 
@@ -836,6 +853,7 @@ function* watchAuth() {
     yield takeLatest(fetchConversationsStart.type, fetchConversationsSaga);
     yield takeLatest(fetchMessagesStart.type, fetchMessagesSaga);
     yield takeLatest(sendMessageStart.type, sendMessageSaga);
+    yield takeLatest(fetchMessagesUnreadStart.type, fetchMessagesUnreadSaga);
 
     yield takeLatest(fetchProjectsStart.type, fetchProjectsSaga);
     yield takeLatest(createProjectStart.type, createProjectSaga);

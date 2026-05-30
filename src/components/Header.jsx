@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { Menu, X, User, Bell, Trash2, ChevronDown } from 'lucide-react';
+import { Menu, X, User, Bell, Trash2, ChevronDown, MessageSquare } from 'lucide-react';
 import reproserveLogo from 'figma:asset/d443497cecc2870d74fc45d88e6b112a10bb43ab.png';
 import { RequestDetailsModal } from './RequestDetailsModal';
+import { MessagingModal } from './MessagingModal';
 import {
   fetchNotificationsStart,
   markNotificationReadStart,
   markAllNotificationsReadStart,
   deleteNotificationStart,
-  fetchQuoteDetailStart
+  fetchQuoteDetailStart,
+  fetchConversationsStart
 } from '../Store/Features/Authentication/authslice';
 
 export function Header({ currentUser, setCurrentUser }) {
@@ -20,10 +22,16 @@ export function Header({ currentUser, setCurrentUser }) {
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showRealEstateDropdown, setShowRealEstateDropdown] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [showMessages, setShowMessages] = useState(false);
+  const [isClosingMessages, setIsClosingMessages] = useState(false);
+  const [showMessagingModal, setShowMessagingModal] = useState(false);
+  const [selectedRecipient, setSelectedRecipient] = useState(null);
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const notifications = useSelector((state) => state.AuthReducer.notifications);
   const unreadCount = useSelector((state) => state.AuthReducer.unreadCount);
+  const messagesUnreadTotal = useSelector((state) => state.AuthReducer.messagesUnreadTotal);
+  const conversations = useSelector((state) => state.AuthReducer.conversations);
   const quoteDetail = useSelector((state) => state.AuthReducer.quoteDetail);
   const quoteDetailLoading = useSelector((state) => state.AuthReducer.quoteDetailLoading);
 
@@ -104,10 +112,13 @@ export function Header({ currentUser, setCurrentUser }) {
     }
   }, [currentUser?.id, dispatch]);
 
-  // Close notifications dropdown when clicking outside
+  // Close notifications dropdown when clicking outside. We used to test for
+  // `.relative` here but Tailwind's `relative` class is everywhere, so almost
+  // every click was treated as inside and the panel never closed. Switch to a
+  // unique container class instead.
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (showNotifications && !event.target.closest('.relative')) {
+      if (showNotifications && !event.target.closest('.notifications-dropdown-container')) {
         setIsClosingNotifications(true);
         setTimeout(() => {
           setShowNotifications(false);
@@ -129,6 +140,21 @@ export function Header({ currentUser, setCurrentUser }) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showProfileDropdown]);
+
+  // Close messages dropdown when clicking outside.
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showMessages && !event.target.closest('.messages-dropdown-container')) {
+        setIsClosingMessages(true);
+        setTimeout(() => {
+          setShowMessages(false);
+          setIsClosingMessages(false);
+        }, 200);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMessages]);
 
   // Close Real Estate dropdown when clicking outside
   useEffect(() => {
@@ -289,7 +315,110 @@ export function Header({ currentUser, setCurrentUser }) {
           <div className="flex items-center space-x-4">
             {currentUser ?
             <div className="hidden md:flex items-center space-x-3">
-                <div className="relative">
+                <div className="relative messages-dropdown-container">
+                  <button
+                    onClick={() => {
+                      if (showMessages) {
+                        setIsClosingMessages(true);
+                        setTimeout(() => {
+                          setShowMessages(false);
+                          setIsClosingMessages(false);
+                        }, 200);
+                      } else {
+                        setShowMessages(true);
+                        setIsClosingMessages(false);
+                        if (currentUser?.id) dispatch(fetchConversationsStart());
+                        // Also close notifications if open.
+                        if (showNotifications) {
+                          setShowNotifications(false);
+                        }
+                      }
+                    }}
+                    className="p-2 rounded-md hover:bg-dark-blue relative"
+                    title="Messages"
+                  >
+                    <MessageSquare className="h-5 w-5 text-white" />
+                    {messagesUnreadTotal > 0 &&
+                      <span className="absolute top-0 right-0 bg-coral-orange text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {messagesUnreadTotal > 99 ? '99+' : messagesUnreadTotal}
+                      </span>
+                    }
+                  </button>
+                  {(showMessages || isClosingMessages) &&
+                    <div
+                      className="absolute right-0 mt-2 rounded-2xl shadow-lg z-50 max-h-96 overflow-y-auto scrollbar-hide"
+                      style={{
+                        width: '420px',
+                        background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
+                        backdropFilter: 'blur(20px)',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)',
+                        animation: isClosingMessages
+                          ? 'dropdownPopOut 0.2s ease-out forwards'
+                          : 'dropdownPopIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
+                      }}>
+                      <div className="p-4 border-b border-white/20">
+                        <h3 className="font-semibold text-white drop-shadow-md">Messages</h3>
+                      </div>
+                      {conversations.length === 0 ?
+                        <div className="p-4 text-center text-white text-sm drop-shadow-md">
+                          No conversations yet. Use the Connect button on a provider or realtor card to start one.
+                        </div> :
+                        <div className="divide-y divide-white/20">
+                          {conversations.map((c) => {
+                            const personal = c.partner?.firstName
+                              ? `${c.partner.firstName} ${c.partner.lastName || ''}`.trim()
+                              : '';
+                            const biz = c.partner?.businessName?.trim() || '';
+                            const display = (personal && biz && personal !== biz)
+                              ? `${personal} (${biz})`
+                              : (personal || biz || c.partner?.email || 'User');
+                            const last = c.lastMessage?.content || '';
+                            const ts = c.lastMessage?.createdAt;
+                            return (
+                              <button
+                                key={c.partner?.id}
+                                onClick={() => {
+                                  setSelectedRecipient({ ...c.partner, name: display });
+                                  setShowMessagingModal(true);
+                                  setIsClosingMessages(true);
+                                  setTimeout(() => {
+                                    setShowMessages(false);
+                                    setIsClosingMessages(false);
+                                  }, 200);
+                                }}
+                                className="w-full text-left p-4 flex items-start gap-3 hover:bg-white/10 transition cursor-pointer"
+                              >
+                                <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                                  {display.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-sm text-white font-medium drop-shadow-md truncate">{display}</p>
+                                    {ts && (
+                                      <span className="text-[10px] text-white/60 flex-shrink-0">
+                                        {new Date(ts).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2 mt-1">
+                                    <p className="text-xs text-white/80 truncate">{last}</p>
+                                    {Number(c.unreadCount) > 0 && (
+                                      <span className="text-[10px] bg-coral-orange text-white rounded-full px-2 py-0.5 flex-shrink-0">
+                                        {c.unreadCount}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+                <div className="relative notifications-dropdown-container">
                   <button
                   onClick={() => {
                     if (showNotifications) {
@@ -536,11 +665,22 @@ export function Header({ currentUser, setCurrentUser }) {
             <div className="pt-4 border-t border-border space-y-2">
               {currentUser ?
             <>
+                  <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setShowMessages(true);
+                  setIsClosingMessages(false);
+                  if (currentUser?.id) dispatch(fetchConversationsStart());
+                }}
+                className="block w-full text-left py-2 text-white drop-shadow-md">
+
+                    Messages {messagesUnreadTotal > 0 ? `(${messagesUnreadTotal})` : ''}
+                  </button>
                   <Link
                 to="/profile"
                 onClick={() => setIsMenuOpen(false)}
                 className="block w-full text-left py-2 text-white drop-shadow-md">
-                
+
                     My Profile
                   </Link>
 
@@ -590,6 +730,14 @@ export function Header({ currentUser, setCurrentUser }) {
         request={quoteDetail}
         loading={quoteDetailLoading}
         onClose={() => setShowRequestModal(false)} />
+
+      <MessagingModal
+        isOpen={showMessagingModal}
+        onClose={() => {
+          setShowMessagingModal(false);
+          setSelectedRecipient(null);
+        }}
+        recipient={selectedRecipient} />
 
     </header>);
 

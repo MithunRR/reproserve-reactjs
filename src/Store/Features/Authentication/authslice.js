@@ -116,6 +116,12 @@ const initialState = {
     sendMessageLoading: false,
     sendMessageError: null,
     sendMessageSuccess: false,
+    // Total unread across all threads — drives the bell badge.
+    messagesUnreadTotal: 0,
+    // Peer-id of the thread currently open in the UI. Used by the live
+    // receiver so an incoming message in the active thread is shown directly
+    // (and instantly marked read) instead of bumping the unread count.
+    activeThreadPeerId: null,
 
     // ── Projects ────────────────────────────────────────────
     projects: [],
@@ -667,6 +673,10 @@ const authSlice = createSlice({
         fetchConversationsSuccess: (state, action) => {
             state.conversationsLoading = false;
             state.conversations = unwrapList(action.payload);
+            // Recompute total unread off the freshly-loaded conversation list.
+            state.messagesUnreadTotal = state.conversations.reduce(
+                (n, c) => n + (Number(c.unreadCount) || 0), 0
+            );
         },
         fetchConversationsFailed: (state) => {
             state.conversationsLoading = false;
@@ -704,6 +714,80 @@ const authSlice = createSlice({
         resetSendMessageFlag: (state) => {
             state.sendMessageSuccess = false;
             state.sendMessageError = null;
+        },
+
+        // Total unread across all threads — used to seed the header badge
+        // (live updates happen in receiveLiveMessage / markThreadReadLocal).
+        fetchMessagesUnreadStart: () => {},
+        fetchMessagesUnreadSuccess: (state, action) => {
+            state.messagesUnreadTotal = Number(action.payload?.total ?? action.payload ?? 0);
+        },
+        fetchMessagesUnreadFailed: () => {},
+
+        // Track which thread is open so live-receive can mark it read directly.
+        setActiveThreadPeer: (state, action) => {
+            state.activeThreadPeerId = action.payload ? Number(action.payload) : null;
+        },
+
+        // A message arrived via socket. Three cases:
+        //   1. It belongs to the open thread → push to messages and stay "read".
+        //   2. It's incoming to us, no open thread → bump unread + last-message
+        //      on the conversation row, create the row if it didn't exist.
+        //   3. It's our own message echoing back (from another tab or REST) →
+        //      just refresh the conversation row.
+        receiveLiveMessage: (state, action) => {
+            // Payload: { message, me }. `me` is required because loginData is
+            // empty after a refresh — pass the persisted user id from the hook.
+            const msg = action.payload?.message || action.payload;
+            const me = Number(action.payload?.me);
+            if (!msg || typeof msg !== 'object' || !me) return;
+            const peerId = Number(msg.senderId) === me ? Number(msg.receiverId) : Number(msg.senderId);
+            const isIncoming = Number(msg.receiverId) === me;
+            const isOpen = state.activeThreadPeerId === peerId;
+
+            // 1. Append to the active thread if relevant.
+            if (isOpen && !state.messages.some((m) => m.id === msg.id)) {
+                state.messages = [...state.messages, msg];
+            }
+
+            // 2/3. Update conversations list.
+            const idx = state.conversations.findIndex(
+                (c) => Number(c.partner?.id) === peerId
+            );
+            const partner = (isIncoming ? msg.sender : msg.receiver) || null;
+            const incrUnread = isIncoming && !isOpen ? 1 : 0;
+            if (idx >= 0) {
+                const existing = state.conversations[idx];
+                const updated = {
+                    ...existing,
+                    partner: existing.partner || partner,
+                    lastMessage: msg,
+                    unreadCount: (Number(existing.unreadCount) || 0) + incrUnread
+                };
+                const rest = state.conversations.filter((_, i) => i !== idx);
+                state.conversations = [updated, ...rest];
+            } else if (partner) {
+                state.conversations = [
+                    { partner, lastMessage: msg, unreadCount: incrUnread },
+                    ...state.conversations
+                ];
+            }
+
+            state.messagesUnreadTotal += incrUnread;
+        },
+
+        // Clear unread for one peer (called when a thread is opened).
+        markThreadReadLocal: (state, action) => {
+            const peerId = Number(action.payload);
+            const idx = state.conversations.findIndex(
+                (c) => Number(c.partner?.id) === peerId
+            );
+            if (idx >= 0) {
+                const c = state.conversations[idx];
+                const cleared = Number(c.unreadCount) || 0;
+                state.conversations[idx] = { ...c, unreadCount: 0 };
+                state.messagesUnreadTotal = Math.max(0, state.messagesUnreadTotal - cleared);
+            }
         },
 
         // ── Projects ────────────────────────────────────────
@@ -973,6 +1057,15 @@ const authSlice = createSlice({
             state.notificationsLoading = false;
             state.notificationsError = action.payload;
         },
+        // A new notification arrived via socket — prepend it and bump the
+        // unread counter that drives the bell badge.
+        receiveLiveNotification: (state, action) => {
+            const n = action.payload;
+            if (!n || typeof n !== 'object' || !n.id) return;
+            if (state.notifications.some((x) => x.id === n.id)) return;
+            state.notifications = [n, ...state.notifications];
+            if (!n.isRead) state.unreadCount = (Number(state.unreadCount) || 0) + 1;
+        },
         markNotificationReadStart: () => {},
         markNotificationReadSuccess: (state, action) => {
             const id = action.payload;
@@ -1096,6 +1189,8 @@ export const {
     fetchConversationsStart, fetchConversationsSuccess, fetchConversationsFailed,
     fetchMessagesStart, fetchMessagesSuccess, fetchMessagesFailed,
     sendMessageStart, sendMessageSuccess, sendMessageFailed, resetSendMessageFlag,
+    fetchMessagesUnreadStart, fetchMessagesUnreadSuccess, fetchMessagesUnreadFailed,
+    setActiveThreadPeer, receiveLiveMessage, markThreadReadLocal,
 
     fetchProjectsStart, fetchProjectsSuccess, fetchProjectsFailed,
     createProjectStart, createProjectSuccess, createProjectFailed, resetCreateProjectFlag,
@@ -1117,6 +1212,7 @@ export const {
     completeShowRequestStart, completeShowRequestSuccess, completeShowRequestFailed, resetCompleteShowRequestFlag,
 
     fetchNotificationsStart, fetchNotificationsSuccess, fetchNotificationsFailed,
+    receiveLiveNotification,
     markNotificationReadStart, markNotificationReadSuccess, markNotificationReadFailed,
     markAllNotificationsReadStart, markAllNotificationsReadSuccess, markAllNotificationsReadFailed,
     deleteNotificationStart, deleteNotificationSuccess, deleteNotificationFailed,
