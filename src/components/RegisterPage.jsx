@@ -163,6 +163,13 @@ export function RegisterPage({ navigate, setCurrentUser }) {
           transform: scale(0.9) translateY(-10px);
         }
       }
+
+      /* ===== PHONE-ONLY layout (laptops/desktops never match this) ===== */
+      @media (max-width: 767px) {
+        .register-card { padding: 1.5rem; }
+        /* Tighter side padding on the account-type tabs so longer labels fit */
+        .register-acct button { padding-left: 0.5rem; padding-right: 0.5rem; }
+      }
     `;
     document.head.appendChild(style);
     return () => {
@@ -446,7 +453,7 @@ useEffect(() => {
 
       <div className="container mx-auto max-w-4xl">
         <div
-          className="rounded-2xl shadow-xl p-8 relative overflow-hidden"
+          className="register-card rounded-2xl shadow-xl p-8 relative overflow-hidden"
           style={{
             background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
             backdropFilter: 'blur(20px)',
@@ -464,7 +471,7 @@ useEffect(() => {
           </div>
 
           {/* Account Type Selection */}
-          <div className="mb-6">
+          <div className="register-acct mb-6">
             <label className="block text-sm text-white mb-2 drop-shadow-md">I am a:</label>
             <div className="flex justify-center">
               <Tabs

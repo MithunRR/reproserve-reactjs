@@ -8,6 +8,9 @@ import {
   Calculator, Search as SearchIcon, ShieldCheck, ScrollText,
   TreePalm } from
 'lucide-react';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchProvidersStart } from '../Store/Features/Authentication/authslice';
+import { currentUserStorage } from '../utils/localStorage';
 const FALLBACK_IMG_SRC =
   'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODgiIGhlaWdodD0iODgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBvcGFjaXR5PSIuMyIgZmlsbD0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIzLjciPjxyZWN0IHg9IjE2IiB5PSIxNiIgd2lkdGg9IjU2IiBoZWlnaHQ9IjU2IiByeD0iNiIvPjxwYXRoIGQ9Im0xNiA1OCAxNi0xOCAzMiAzMiIvPjxjaXJjbGUgY3g9IjUzIiBjeT0iMzUiIHI9IjciLz48L3N2Zz4KCg==';
 
@@ -37,6 +40,15 @@ export function HomePage({ navigate }) {
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const searchInputRef = useRef(null);
   const suggestionsRef = useRef(null);
+
+  // Live service providers for the "Featured Service Providers" section.
+  const dispatch = useDispatch();
+  const apiProviders = useSelector((state) => state.AuthReducer.providers);
+  const currentUser = currentUserStorage.get();
+
+  useEffect(() => {
+    dispatch(fetchProvidersStart({ role: 'service_provider' }));
+  }, [dispatch]);
 
   // Scroll-float animation hook
   useEffect(() => {
@@ -126,6 +138,29 @@ export function HomePage({ navigate }) {
         to {
           opacity: 1;
           transform: translateY(0);
+        }
+      }
+
+      /* ---- Phone-only layout overrides (laptops/desktops never match) ---- */
+      @media (max-width: 767px) {
+        /* Realtor services: stop the squashed single-letter row, use 2 columns */
+        .realtor-cards-row {
+          display: grid !important;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.75rem;
+          overflow: visible !important;
+        }
+        .realtor-cards-row > button {
+          flex: none !important;
+          padding: 0.75rem !important;
+        }
+        /* Service-provider categories: 2 columns instead of a single column */
+        .provider-cards-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: 0.75rem !important;
+        }
+        .provider-cards-grid > button {
+          padding: 0.75rem !important;
         }
       }
     `;
@@ -370,71 +405,36 @@ export function HomePage({ navigate }) {
   }];
 
 
-  const featuredProviders = [
-  {
-    id: 1,
-    name: 'Elite Construction Co.',
-    category: 'General Contractor',
-    rating: 4.9,
-    reviewCount: 127,
-    location: 'Los Angeles, CA',
-    phone: '(555) 123-4567',
-    verified: true,
-    yearsInBusiness: 15,
-    completedJobs: 450,
-    specialties: ['Kitchen Remodeling', 'Bathroom Renovation', 'Home Additions'],
-    description: 'Premier construction company specializing in high-end residential renovations and custom builds.',
-    startingPrice: '$2,500',
-    image: 'https://images.unsplash.com/photo-1667893185343-9e869ae6e1bd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb25zdHJ1Y3Rpb24lMjBjb250cmFjdG9yJTIwaG9tZSUyMHJlbm92YXRpb258ZW58MXx8fHwxNzU5MjExOTUwfDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
-  },
-  {
-    id: 2,
-    name: 'PowerFlow Electrical',
-    category: 'Electrician',
-    rating: 4.8,
-    reviewCount: 89,
-    location: 'Phoenix, AZ',
-    phone: '(555) 234-5678',
-    verified: true,
-    yearsInBusiness: 8,
-    completedJobs: 320,
-    specialties: ['Panel Upgrades', 'Smart Home Wiring', 'Emergency Repairs'],
-    description: 'Licensed electrical contractor providing safe, reliable electrical services for residential properties.',
-    startingPrice: '$150',
-    image: 'https://images.unsplash.com/photo-1646640345481-81d36b291b39?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxlbGVjdHJpY2lhbiUyMGVsZWN0cmljYWwlMjB3b3JrJTIwaW5zdGFsbGF0aW9ufGVufDF8fHx8MTc1OTIxMTk1NHww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
-  },
-  {
-    id: 3,
-    name: 'GreenScape Landscaping',
-    category: 'Landscaper',
-    rating: 4.7,
-    reviewCount: 156,
-    location: 'Denver, CO',
-    phone: '(555) 345-6789',
-    verified: true,
-    yearsInBusiness: 12,
-    completedJobs: 280,
-    specialties: ['Garden Design', 'Hardscaping', 'Irrigation Systems'],
-    description: 'Creating beautiful outdoor spaces with sustainable landscaping solutions and expert design.',
-    startingPrice: '$500',
-    image: 'https://images.unsplash.com/photo-1597201278257-3687be27d954?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsYW5kc2NhcGluZyUyMGdhcmRlbiUyMGRlc2lnbiUyMG91dGRvb3J8ZW58MXx8fHwxNzU5MjExOTU3fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
-  },
-  {
-    id: 4,
-    name: 'AquaFlow Plumbing',
-    category: 'Plumber',
-    rating: 4.9,
-    reviewCount: 203,
-    location: 'Miami, FL',
-    phone: '(555) 456-7890',
-    verified: true,
-    yearsInBusiness: 20,
-    completedJobs: 675,
-    specialties: ['Leak Detection', 'Water Heater Installation', 'Pipe Replacement'],
-    description: 'Trusted plumbing services with 24/7 emergency support and upfront pricing.',
-    startingPrice: '$125',
-    image: 'https://images.unsplash.com/photo-1650246363606-a2402ec42b08?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwbHVtYmVyJTIwcGx1bWJpbmclMjByZXBhaXIlMjBwaXBlc3xlbnwxfHx8fDE3NTkyMTE5NjB8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
-  }];
+  // Featured providers come from the live directory (/providers?role=service_provider).
+  // A provider is featured when their rating is 4★ or higher, OR — when the visitor
+  // is logged in — when they're located in the same city as the visitor.
+  const userCity = (currentUser?.location || '').split(',')[0].trim().toLowerCase();
+  const featuredProviders = (apiProviders || []).
+  map((u) => ({
+    id: u.id,
+    name: u.businessName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'Service Provider',
+    category: u.serviceType?.name || 'Service Provider',
+    rating: Number(u.averageRating) || 0,
+    reviewCount: u.reviewCount || 0,
+    location: [u.city, u.state].filter(Boolean).join(', ') || 'Location not set',
+    city: (u.city || '').trim().toLowerCase(),
+    phone: u.phone || '',
+    verified: u.isActive !== false,
+    yearsInBusiness: u.createdAt
+      ? Math.max(1, new Date().getFullYear() - new Date(u.createdAt).getFullYear())
+      : 1,
+    completedJobs: u.completedJobs || 0,
+    specialties: Array.isArray(u.specialties) ? u.specialties : [],
+    description: u.businessDesc || 'No description provided.',
+    startingPrice: u.startingPrice || 'Contact for pricing',
+    image: null
+  })).
+  filter((p) => {
+    const ratingOk = p.rating >= 4;
+    const cityOk = !!currentUser?.id && !!userCity && p.city === userCity;
+    return ratingOk || cityOk;
+  }).
+  slice(0, 4);
 
 
   return (
@@ -582,7 +582,7 @@ export function HomePage({ navigate }) {
 
           {/* Featured Realtor Services */}
           <div className="scroll-float scroll-float-delay-3 mb-12">
-            <div className="flex flex-nowrap gap-6 max-w-7xl mx-auto overflow-x-auto scrollbar-hide">
+            <div className="realtor-cards-row flex flex-nowrap gap-6 max-w-7xl mx-auto overflow-x-auto scrollbar-hide">
               {realtorCategories[0].services.map((service, serviceIndex) => {
                 const IconComponent = service.icon;
                 const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -651,7 +651,7 @@ export function HomePage({ navigate }) {
 
           {/* Featured Service Provider Categories */}
           <div className="scroll-float scroll-float-delay-4 mb-12">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 max-w-7xl mx-auto">
+            <div className="provider-cards-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 max-w-7xl mx-auto">
               {[
               {
                 name: 'Construction and Renovation',
@@ -775,12 +775,14 @@ export function HomePage({ navigate }) {
             </p>
           </div>
 
+          {featuredProviders.length === 0 ?
+          <p className="text-center text-cool-gray text-lg py-8">No featured providers to show right now.</p> :
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {featuredProviders.map((provider, index) =>
             <div
               key={provider.id}
-              className={`scroll-float scroll-float-delay-${Math.min(index % 4, 3)} group relative rounded-2xl p-8 cursor-pointer overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-2 flex flex-col`}
-              onClick={() => navigate('provider-profile')}
+              className={`group relative rounded-2xl p-8 cursor-pointer overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-2 flex flex-col`}
+              onClick={() => { localStorage.setItem('selectedProviderId', provider.id); navigate('provider-profile'); }}
               style={{
                 background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
                 backdropFilter: 'blur(20px)',
@@ -794,12 +796,14 @@ export function HomePage({ navigate }) {
                 {/* Content */}
                 <div className="relative z-10 flex flex-col h-full">
                   <div className="flex items-start justify-between mb-4">
-                    <div className="h-20 w-20 rounded-full overflow-hidden ring-4 ring-white/20 group-hover:ring-sky-blue/30 transition-all duration-300">
+                    <div className="h-20 w-20 rounded-full overflow-hidden ring-4 ring-white/20 group-hover:ring-sky-blue/30 transition-all duration-300 flex items-center justify-center bg-dark-blue text-white text-2xl font-bold">
+                      {provider.image ?
                       <ImageWithFallback
-                      src={provider.image}
-                      alt={provider.name}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
-                    
+                        src={provider.image}
+                        alt={provider.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" /> :
+                      provider.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+                      }
                     </div>
                     {provider.verified &&
                   <div className="px-3 py-1.5 rounded-full text-xs flex items-center bg-sky-blue/20 backdrop-blur-sm border border-sky-blue/30 text-sky-blue font-semibold group-hover:bg-sky-blue/30 transition-all duration-300">
@@ -837,7 +841,7 @@ export function HomePage({ navigate }) {
                       <div className="font-medium">{provider.completedJobs} jobs completed</div>
                     </div>
 
-                    <p className="text-sm leading-relaxed text-cool-gray group-hover:text-gray-700 transition-colors duration-300">
+                    <p className="text-sm leading-relaxed text-cool-gray group-hover:text-gray-700 transition-colors duration-300 line-clamp-3">
                       {provider.description}
                     </p>
 
@@ -849,9 +853,9 @@ export function HomePage({ navigate }) {
                     )}
                     </div>
 
-                    <div className="flex items-center justify-between pt-3 border-t border-white/20">
-                      <span className="text-sm text-cool-gray group-hover:text-gray-700 transition-colors duration-300 font-medium">Starting at</span>
-                      <span className="text-xl text-sky-blue font-bold group-hover:text-sky-blue transition-colors duration-300">{provider.startingPrice}</span>
+                    <div className="flex items-center justify-between gap-2 pt-3 border-t border-white/20">
+                      <span className="text-sm text-cool-gray group-hover:text-gray-700 transition-colors duration-300 font-medium flex-shrink-0">Starting at</span>
+                      <span className="text-base text-sky-blue font-bold group-hover:text-sky-blue transition-colors duration-300 text-right">{provider.startingPrice}</span>
                     </div>
                   </div>
 
@@ -873,12 +877,13 @@ export function HomePage({ navigate }) {
               </div>
             )}
           </div>
+          }
 
           <div className="text-center mt-8">
             <button
-              onClick={() => navigate('service-providers')}
+              onClick={() => navigate('find-providers')}
               className="px-6 py-3 rounded-md bg-dark-blue text-white transition-colors hover:opacity-90">
-              
+
               View All Featured Providers
             </button>
           </div>

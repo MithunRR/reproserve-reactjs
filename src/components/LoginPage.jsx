@@ -162,6 +162,11 @@ export function LoginPage({ navigate, setCurrentUser }) {
           transform: scale(0.9) translateY(-10px);
         }
       }
+
+      /* ===== PHONE-ONLY layout (laptops/desktops never match this) ===== */
+      @media (max-width: 767px) {
+        .login-card { padding: 1.5rem; }
+      }
     `;
     document.head.appendChild(style);
     return () => {
@@ -238,7 +243,7 @@ export function LoginPage({ navigate, setCurrentUser }) {
 
       <div className="container mx-auto max-w-4xl">
         <div
-          className="rounded-2xl shadow-xl p-8 relative overflow-hidden"
+          className="login-card rounded-2xl shadow-xl p-8 relative overflow-hidden"
           style={{
             background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
             backdropFilter: 'blur(20px)',

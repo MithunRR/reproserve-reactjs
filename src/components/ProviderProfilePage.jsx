@@ -58,6 +58,23 @@ export function ProviderProfilePage({ navigate }) {
     }
   }, [createQuoteError, dispatch]);
 
+  // Inject phone-only responsive tweaks (laptops/desktops never match this).
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @media (max-width: 767px) {
+        /* Tighter tab padding so all four labels fit on a phone */
+        .pp-tabs > button {
+          padding-left: 0.5rem;
+          padding-right: 0.5rem;
+          font-size: 0.875rem;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
   // Map the API provider record into the shape this page renders.
   const p = providerDetail || {};
   const providerData = {
@@ -575,7 +592,7 @@ export function ProviderProfilePage({ navigate }) {
             boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
           }}>
           
-          <div className="flex">
+          <div className="pp-tabs flex">
             {[
             { id: 'overview', label: 'Overview' },
             { id: 'portfolio', label: 'Portfolio' },

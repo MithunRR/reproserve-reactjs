@@ -508,7 +508,7 @@ export function FindProvidersPage({ navigate }) {
 
           {/* Search and Filters */}
           <div
-            className="rounded-2xl p-6 mb-8 relative overflow-visible"
+            className="rounded-2xl p-4 sm:p-6 mb-8 relative overflow-visible"
             style={{
               background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
               backdropFilter: 'blur(20px)',
@@ -580,9 +580,9 @@ export function FindProvidersPage({ navigate }) {
             </div>
 
             <div className="flex flex-nowrap items-center gap-3 mb-4">
-              <Filter className="h-5 w-5 text-white flex-shrink-0" />
+              <Filter className="h-5 w-5 text-white flex-shrink-0 hidden sm:block" />
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 flex-1">
                 {/* Search Input */}
                 <div className="relative">
                   <input
@@ -1013,7 +1013,7 @@ export function FindProvidersPage({ navigate }) {
                 {sortedProviders.map((provider) =>
                 <div
                   key={provider.id}
-                  className="group relative rounded-2xl p-8 cursor-pointer overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-2 z-10"
+                  className="group relative rounded-2xl p-5 sm:p-8 cursor-pointer overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-2 z-10"
                   onClick={() => { localStorage.setItem('selectedProviderId', provider.id); navigate('provider-profile'); }}
                   style={{
                     background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
@@ -1097,7 +1097,7 @@ export function FindProvidersPage({ navigate }) {
 
                       {/* Actions */}
                       <div
-                      className="lg:w-48 flex lg:flex-col gap-3 relative z-30"
+                      className="lg:w-48 flex lg:flex-col gap-2 lg:gap-3 relative z-30"
                       onClick={(e) => e.stopPropagation()}
                       style={{ pointerEvents: 'auto' }}>
                       
@@ -1108,7 +1108,7 @@ export function FindProvidersPage({ navigate }) {
                           localStorage.setItem('selectedProviderId', provider.id);
                           navigate('provider-profile');
                         }}
-                        className="flex-1 lg:w-full py-3 px-4 rounded-lg text-white hover:scale-105 transition-all duration-300 font-semibold cursor-pointer shadow-lg"
+                        className="flex-1 lg:w-full py-3 px-2 sm:px-4 rounded-lg text-white hover:scale-105 transition-all duration-300 font-semibold cursor-pointer shadow-lg text-sm sm:text-base text-center"
                         style={{
                           pointerEvents: 'auto',
                           zIndex: 9999,
@@ -1121,7 +1121,7 @@ export function FindProvidersPage({ navigate }) {
                           View Profile
                         </button>
                         <button
-                        className="flex-1 lg:w-full py-3 px-4 rounded-lg text-white hover:scale-105 transition-all duration-300 font-semibold cursor-pointer shadow-lg"
+                        className="flex-1 lg:w-full py-3 px-2 sm:px-4 rounded-lg text-white hover:scale-105 transition-all duration-300 font-semibold cursor-pointer shadow-lg text-sm sm:text-base text-center"
                         style={{
                           pointerEvents: 'auto',
                           zIndex: 9999,
@@ -1154,7 +1154,7 @@ export function FindProvidersPage({ navigate }) {
                           setSelectedProvider(provider);
                           setShowMessagingModal(true);
                         }}
-                        className="flex-1 lg:w-full py-3 px-4 rounded-lg text-white hover:scale-105 transition-all duration-300 flex items-center justify-center font-semibold cursor-pointer shadow-lg"
+                        className="flex-1 lg:w-full py-3 px-2 sm:px-4 rounded-lg text-white hover:scale-105 transition-all duration-300 flex items-center justify-center font-semibold cursor-pointer shadow-lg text-sm sm:text-base"
                         style={{
                           pointerEvents: 'auto',
                           zIndex: 9999,
@@ -1164,8 +1164,8 @@ export function FindProvidersPage({ navigate }) {
                           boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
                         }}>
                         
-                          <MessageSquare className="h-4 w-4 lg:mr-2" />
-                          <span className="hidden lg:inline">Connect</span>
+                          <MessageSquare className="h-4 w-4 mr-1 sm:mr-0 lg:mr-2 flex-shrink-0" />
+                          <span className="inline sm:hidden lg:inline">Connect</span>
                         </button>
                       </div>
                     </div>

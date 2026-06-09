@@ -156,6 +156,44 @@ export function OpenHousePage({ navigate, currentUser }) {
       input[type="text"] {
         color: #ffffff !important;
       }
+
+      /* ===== PHONE-ONLY layout (laptops/desktops never match this) ===== */
+      @media (max-width: 767px) {
+        /* Header: stack title above the Create button */
+        .oh-header {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 1rem;
+        }
+        /* Filter bar: filters block and view/reset block stack full width */
+        .oh-bar { align-items: stretch; }
+        .oh-filters {
+          flex-wrap: wrap;
+          overflow-x: visible;
+        }
+        /* Every filter takes a full row */
+        .oh-filters > div { width: 100%; }
+        .oh-filters > div input,
+        .oh-filters > div > button { width: 100%; }
+        /* Range groups: Min/Max inputs share the row evenly */
+        .oh-range { width: 100%; }
+        .oh-range > input {
+          flex: 1 1 0 !important;
+          width: 0 !important;
+          min-width: 0 !important;
+        }
+        /* View toggle + Reset spread across the row */
+        .oh-view {
+          width: 100%;
+          justify-content: space-between;
+        }
+        /* Card: badge/edit/delete row sits in normal flow above the title */
+        .oh-badges {
+          position: static;
+          justify-content: flex-end;
+          margin-bottom: 0.75rem;
+        }
+      }
     `;
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
@@ -190,6 +228,21 @@ export function OpenHousePage({ navigate, currentUser }) {
   }, [isTypeDropdownOpen]);
 
   const filteredOpenHouses = openHouses.filter((house) => {
+    // Hide open houses that are already over — i.e. whose end ("To") date is
+    // before today. Falls back to the start date / legacy single date when no
+    // explicit "To" is set; entries with no usable date stay visible.
+    const endRaw = house.toDate || house.toDateAndTime || house.fromDate || house.fromDateAndTime || house.dateTime;
+    if (endRaw) {
+      const endDate = new Date(endRaw);
+      if (!isNaN(endDate.getTime())) {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        if (endDate < startOfToday) {
+          return false;
+        }
+      }
+    }
+
     // Search term filter
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
@@ -471,7 +524,7 @@ export function OpenHousePage({ navigate, currentUser }) {
       <div className="container mx-auto max-w-7xl">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
+          <div className="oh-header flex items-center justify-between">
             <div>
               <h1 className="text-3xl md:text-4xl mb-4 text-white drop-shadow-lg">Open Houses</h1>
               <p className="text-xl text-white drop-shadow-md">Browse upcoming property open houses</p>
@@ -505,9 +558,9 @@ export function OpenHousePage({ navigate, currentUser }) {
             boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
           }}>
           
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="oh-bar flex flex-col md:flex-row items-center justify-between gap-4">
             {/* Filters */}
-            <div className="flex flex-nowrap items-center gap-3 flex-1 overflow-x-auto">
+            <div className="oh-filters flex flex-nowrap items-center gap-3 flex-1 overflow-x-auto">
               {/* <Filter className="h-5 w-5 text-white" /> */}
 
               {/* Search Input */}
@@ -615,7 +668,7 @@ export function OpenHousePage({ navigate, currentUser }) {
               </div>
 
               {/* Square Footage Filter */}
-              <div className="flex items-center space-x-2 flex-shrink-0">
+              <div className="oh-range flex items-center space-x-2 flex-shrink-0">
                 <span className="text-white text-sm drop-shadow-md whitespace-nowrap">Sq Ft:</span>
                 <input
                   type="number"
@@ -647,7 +700,7 @@ export function OpenHousePage({ navigate, currentUser }) {
               </div>
 
               {/* Price Range Filter */}
-              <div className="flex items-center space-x-2 flex-shrink-0">
+              <div className="oh-range flex items-center space-x-2 flex-shrink-0">
                 <DollarSign className="h-5 w-5 text-white flex-shrink-0" />
                 <input
                   type="number"
@@ -681,7 +734,7 @@ export function OpenHousePage({ navigate, currentUser }) {
             </div>
 
             {/* View Toggle and Reset */}
-            <div className="flex items-center space-x-4">
+            <div className="oh-view flex items-center space-x-4">
               {/* View Toggle */}
               <div className="flex items-center space-x-2">
                 <span className="text-white drop-shadow-md mr-2 text-m">View:</span>
@@ -766,7 +819,7 @@ export function OpenHousePage({ navigate, currentUser }) {
             }}>
             
                 {/* Type Badge and Action Buttons */}
-                <div className="absolute top-4 right-4 z-20 flex items-center space-x-2">
+                <div className="oh-badges absolute top-4 right-4 z-20 flex items-center space-x-2">
                   <span
                 className="px-3 py-1 rounded-full text-xs font-medium text-white drop-shadow-md"
                 style={{

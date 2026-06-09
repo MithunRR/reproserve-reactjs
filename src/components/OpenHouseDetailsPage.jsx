@@ -42,6 +42,19 @@ export function OpenHouseDetailsPage({ navigate, currentUser }) {
     setOpenHouse(found || null);
   }, [id, apiOpenHouses]);
 
+  // Phone-only responsive tweaks (laptops/desktops never match this).
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @media (max-width: 767px) {
+        .ohd-actions { flex-direction: column; gap: 0.75rem; align-items: stretch; }
+        .ohd-actions > button { width: 100%; margin-left: 0 !important; }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
   // Helper function to format price (handles both string and number)
   const formatPrice = (price) => {
     if (!price) return 'Not specified';
@@ -362,7 +375,7 @@ export function OpenHouseDetailsPage({ navigate, currentUser }) {
             }
 
             {/* Action Buttons */}
-            <div className="flex space-x-8 justify-end pt-4 border-t border-white/20">
+            <div className="ohd-actions flex space-x-8 justify-end pt-4 border-t border-white/20">
               <button
                 onClick={() => navigate('open-house')}
                 className="px-6 py-3 text-white rounded-lg hover:scale-105 transition-all duration-300 font-semibold cursor-pointer shadow-lg"

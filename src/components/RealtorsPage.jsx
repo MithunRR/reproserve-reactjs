@@ -214,6 +214,27 @@ export function RealtorsPage({ navigate, currentUser }) {
           transform: translateY(0);
         }
       }
+
+      /* ---- Phone-only filter layout (laptops/desktops never match) ---- */
+      @media (max-width: 767px) {
+        .realtor-filter-row {
+          display: grid !important;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.75rem;
+          overflow: visible !important;
+        }
+        /* Hide the funnel icon on phones to free up width */
+        .realtor-filter-row > svg { display: none; }
+        /* Each filter fills its grid cell */
+        .realtor-filter-row > div,
+        .realtor-filter-row > button {
+          max-width: none !important;
+          flex: none !important;
+          width: 100%;
+        }
+        /* Reset spans the full width on its own row */
+        .realtor-filter-row > button:last-child { grid-column: 1 / -1; }
+      }
     `;
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
@@ -359,7 +380,7 @@ export function RealtorsPage({ navigate, currentUser }) {
 
         {/* Search and Filters */}
         <div
-          className="rounded-2xl shadow-lg p-6 mb-8 relative overflow-visible"
+          className="rounded-2xl shadow-lg p-4 sm:p-6 mb-8 relative overflow-visible"
           style={{
             background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
             backdropFilter: 'blur(20px)',
@@ -427,7 +448,7 @@ export function RealtorsPage({ navigate, currentUser }) {
             }
           </div>
 
-          <div className="flex flex-nowrap items-center gap-3 overflow-x-auto">
+          <div className="realtor-filter-row flex flex-nowrap items-center gap-3 overflow-x-auto">
           <Filter className="h-5 w-5 text-white flex-shrink-0" />
             {/* Search Input */}
             <div className="relative flex-shrink-0 flex-1 max-w-75">
@@ -702,7 +723,7 @@ export function RealtorsPage({ navigate, currentUser }) {
               {sortedProviders.map((provider) =>
               <div
                 key={provider.id}
-                className="group relative rounded-2xl p-6 overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-2 cursor-pointer"
+                className="group relative rounded-2xl p-4 sm:p-6 overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-2 cursor-pointer"
                 style={{
                   background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
                   backdropFilter: 'blur(20px)',
@@ -787,7 +808,7 @@ export function RealtorsPage({ navigate, currentUser }) {
 
                       {/* Actions */}
                       <div
-                      className="lg:w-48 flex lg:flex-col gap-3 relative z-30"
+                      className="lg:w-48 flex lg:flex-col gap-2 lg:gap-3 relative z-30"
                       onClick={(e) => e.stopPropagation()}
                       style={{ pointerEvents: 'auto' }}>
                       
@@ -798,7 +819,7 @@ export function RealtorsPage({ navigate, currentUser }) {
                           localStorage.setItem('selectedProviderId', provider.id);
                           navigate('provider-profile');
                         }}
-                        className="flex-1 lg:w-full py-3 px-4 rounded-lg text-white hover:scale-105 transition-all duration-300  cursor-pointer shadow-lg"
+                        className="flex-1 lg:w-full py-3 px-2 sm:px-4 rounded-lg text-white hover:scale-105 transition-all duration-300  cursor-pointer shadow-lg text-sm sm:text-base text-center"
                         style={{
                           pointerEvents: 'auto',
                           zIndex: 9999,
@@ -811,7 +832,7 @@ export function RealtorsPage({ navigate, currentUser }) {
                           View Profile
                         </button>
                         <button
-                        className="flex-1 lg:w-full py-3 px-4 rounded-lg text-white hover:scale-105 transition-all duration-300  cursor-pointer shadow-lg"
+                        className="flex-1 lg:w-full py-3 px-2 sm:px-4 rounded-lg text-white hover:scale-105 transition-all duration-300  cursor-pointer shadow-lg text-sm sm:text-base text-center"
                         style={{
                           pointerEvents: 'auto',
                           zIndex: 9999,
@@ -843,7 +864,7 @@ export function RealtorsPage({ navigate, currentUser }) {
                           setSelectedProvider(provider);
                           setShowMessagingModal(true);
                         }}
-                        className="flex-1 lg:w-full py-3 px-4 rounded-lg text-white hover:scale-105 transition-all duration-300 flex items-center justify-center  cursor-pointer shadow-lg"
+                        className="flex-1 lg:w-full py-3 px-2 sm:px-4 rounded-lg text-white hover:scale-105 transition-all duration-300 flex items-center justify-center  cursor-pointer shadow-lg text-sm sm:text-base"
                         style={{
                           pointerEvents: 'auto',
                           zIndex: 9999,
@@ -853,8 +874,8 @@ export function RealtorsPage({ navigate, currentUser }) {
                           boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
                         }}>
                         
-                          <MessageSquare className="h-4 w-4 lg:mr-2" />
-                          <span className="hidden lg:inline">Connect</span>
+                          <MessageSquare className="h-4 w-4 mr-1 sm:mr-0 lg:mr-2 flex-shrink-0" />
+                          <span className="inline sm:hidden lg:inline">Connect</span>
                         </button>
                       </div>
                     </div>

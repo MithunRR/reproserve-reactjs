@@ -118,7 +118,7 @@ export function MessagingModal({ isOpen, onClose, recipient }) {
       onClick={handleClose}
     >
       <div
-        className="relative w-full max-w-2xl rounded-2xl p-6 overflow-hidden flex flex-col"
+        className="relative w-full max-w-2xl rounded-2xl p-4 sm:p-6 overflow-hidden flex flex-col"
         style={{
           background: 'linear-gradient(135deg, rgba(0, 137, 225, 0.95), rgba(0, 69, 113, 0.95))',
           backdropFilter: 'blur(20px)',
@@ -189,15 +189,15 @@ export function MessagingModal({ isOpen, onClose, recipient }) {
             onChange={(e) => setDraft(e.target.value)}
             placeholder={me?.id ? 'Type your message…' : 'Log in to send a message'}
             disabled={!me?.id || sending}
-            className="flex-1 px-4 py-2 rounded-md border-2 border-white/30 bg-white/10 backdrop-blur-sm text-white placeholder-white/70 focus:outline-none focus:border-white/60 disabled:opacity-60"
+            className="flex-1 min-w-0 px-4 py-2 rounded-md border-2 border-white/30 bg-white/10 backdrop-blur-sm text-white placeholder-white/70 focus:outline-none focus:border-white/60 disabled:opacity-60"
           />
           <button
             type="submit"
             disabled={!me?.id || !draft.trim() || sending}
-            className="px-5 py-2 rounded-md bg-coral-orange text-black hover:bg-coral-orange/90 hover:scale-105 transition-all duration-300 font-semibold flex items-center space-x-2 disabled:opacity-60 disabled:hover:scale-100"
+            className="flex-shrink-0 px-4 sm:px-5 py-2 rounded-md bg-coral-orange text-black hover:bg-coral-orange/90 hover:scale-105 transition-all duration-300 font-semibold flex items-center space-x-2 disabled:opacity-60 disabled:hover:scale-100"
           >
-            <Send className="h-4 w-4" />
-            <span>{sending ? 'Sending…' : 'Send'}</span>
+            <Send className="h-4 w-4 flex-shrink-0" />
+            <span className="hidden sm:inline">{sending ? 'Sending…' : 'Send'}</span>
           </button>
         </form>
       </div>

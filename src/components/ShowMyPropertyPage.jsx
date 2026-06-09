@@ -50,6 +50,22 @@ export function ShowMyPropertyPage({ navigate, currentUser }) {
     }
   }, [createShowRequestError, dispatch]);
 
+  // Phone-only responsive tweaks (laptops/desktops never match this).
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @media (max-width: 767px) {
+        .smp-card { padding: 1.5rem !important; }
+        .smp-photos { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .smp-dates { grid-template-columns: 1fr; }
+        .smp-submit { flex-direction: column; gap: 0.75rem; align-items: stretch; }
+        .smp-submit > button { width: 100%; }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
   const showingAgents = useMemo(() =>
     (providersList || [])
       .filter((p) => p.role === 'realtor')
@@ -176,7 +192,7 @@ export function ShowMyPropertyPage({ navigate, currentUser }) {
         {/* Showing Agents preview (real realtors from the directory) */}
         {showingAgents.length > 0 &&
           <div
-            className="rounded-2xl shadow-lg p-8 mb-8 relative overflow-hidden"
+            className="smp-card rounded-2xl shadow-lg p-8 mb-8 relative overflow-hidden"
             style={{
               background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
               backdropFilter: 'blur(20px)',
@@ -225,7 +241,7 @@ export function ShowMyPropertyPage({ navigate, currentUser }) {
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Property Details */}
           <div
-            className="rounded-2xl shadow-lg p-8 relative overflow-hidden"
+            className="smp-card rounded-2xl shadow-lg p-8 relative overflow-hidden"
             style={{
               background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
               backdropFilter: 'blur(20px)',
@@ -316,7 +332,7 @@ export function ShowMyPropertyPage({ navigate, currentUser }) {
               </div>
 
               {/* Date window */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="smp-dates grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-white mb-2 drop-shadow-md">Available From (optional)</label>
                   <div className="relative">
@@ -341,7 +357,7 @@ export function ShowMyPropertyPage({ navigate, currentUser }) {
 
           {/* Photos & Video */}
           <div
-            className="rounded-2xl shadow-lg p-8 relative overflow-hidden"
+            className="smp-card rounded-2xl shadow-lg p-8 relative overflow-hidden"
             style={{
               background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
               backdropFilter: 'blur(20px)',
@@ -359,7 +375,7 @@ export function ShowMyPropertyPage({ navigate, currentUser }) {
                 <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} className="hidden" />
               </label>
               {formData.photos.length > 0 &&
-                <div className="grid grid-cols-5 gap-2">
+                <div className="smp-photos grid grid-cols-5 gap-2">
                   {formData.photos.map((photo, index) =>
                     <div key={index} className="relative">
                       <img src={URL.createObjectURL(photo)} alt={`Photo ${index + 1}`}
@@ -389,7 +405,7 @@ export function ShowMyPropertyPage({ navigate, currentUser }) {
           </div>
 
           {/* Submit */}
-          <div className="flex justify-end space-x-4">
+          <div className="smp-submit flex justify-end space-x-4">
             <button type="button" onClick={handleCancel}
               className="px-6 py-3 rounded-md border-2 border-white/30 text-white hover:bg-white/20 hover:border-white/50 transition-colors">
               Cancel

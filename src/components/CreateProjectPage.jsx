@@ -49,6 +49,20 @@ export function CreateProjectPage({ navigate }) {
     }
   }, [createProjectError, dispatch]);
 
+  // Phone-only responsive tweaks (laptops/desktops never match this).
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @media (max-width: 767px) {
+        .cp-card { padding: 1.5rem !important; }
+        .cp-submit { flex-direction: column; gap: 0.75rem; align-items: stretch; }
+        .cp-submit > button { width: 100%; margin-left: 0 !important; }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
   const categories = [
   'Construction & Renovation',
   'Repairs & Maintenance',
@@ -137,7 +151,7 @@ export function CreateProjectPage({ navigate }) {
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Project Name */}
           <div
-            className="rounded-2xl shadow-lg p-8 relative overflow-hidden"
+            className="cp-card rounded-2xl shadow-lg p-8 relative overflow-hidden"
             style={{
               background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
               backdropFilter: 'blur(20px)',
@@ -205,7 +219,7 @@ export function CreateProjectPage({ navigate }) {
 
           {/* Photos */}
           <div
-            className="rounded-2xl shadow-lg p-8 relative overflow-hidden"
+            className="cp-card rounded-2xl shadow-lg p-8 relative overflow-hidden"
             style={{
               background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
               backdropFilter: 'blur(20px)',
@@ -262,7 +276,7 @@ export function CreateProjectPage({ navigate }) {
 
           {/* Video */}
           <div
-            className="rounded-2xl shadow-lg p-8 relative overflow-hidden"
+            className="cp-card rounded-2xl shadow-lg p-8 relative overflow-hidden"
             style={{
               background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
               backdropFilter: 'blur(20px)',
@@ -311,7 +325,7 @@ export function CreateProjectPage({ navigate }) {
           </div>
 
           {/* Submit */}
-          <div className="flex justify-end space-x-4">
+          <div className="cp-submit flex justify-end space-x-4">
             <button
               type="button"
               onClick={() => navigate('profile')}

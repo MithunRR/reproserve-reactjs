@@ -114,6 +114,27 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
       .animate-fadeIn {
         animation: fadeIn 0.2s ease-out;
       }
+
+      /* ===== PHONE-ONLY layout (laptops/desktops never match this) ===== */
+      @media (max-width: 767px) {
+        /* Tab bar scrolls horizontally so labels stay readable instead of
+           being crushed into 7 equal slivers. */
+        .profile-tabs {
+          overflow-x: auto;
+          scrollbar-width: none;
+        }
+        .profile-tabs::-webkit-scrollbar { display: none; }
+        .profile-tabs > button {
+          flex: 0 0 auto;
+          min-width: 92px;
+        }
+        /* Section headers: title stacks above its action button */
+        .profile-head-row {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.75rem;
+        }
+      }
     `;
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
@@ -806,7 +827,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
         boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
       }}>
       
-        <div className="flex items-center justify-between">
+        <div className="profile-head-row flex items-center justify-between">
           <div>
             <h3 className="text-xl text-white mb-2 drop-shadow-lg">Create Open House</h3>
             <p className="text-sm text-white drop-shadow-md">List a new property open house for potential buyers</p>
@@ -833,7 +854,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
 
   const renderProjects = () =>
   <div className="space-y-6 animate-fadeIn">
-      <div className="flex items-center justify-between">
+      <div className="profile-head-row flex items-center justify-between">
         <h3 className="text-xl text-white drop-shadow-lg">My Projects</h3>
         <button
         onClick={() => navigate('create-project')}
@@ -976,7 +997,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
 
       {/* Quote Requests */}
       <div>
-        <div className="flex items-center justify-between mb-6">
+        <div className="profile-head-row flex items-center justify-between mb-6">
           <h3 className="text-xl text-white drop-shadow-lg">My Quote Requests</h3>
           <button
           onClick={() => setShowQuoteModal(true)}
@@ -1483,7 +1504,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
             boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
           }}>
           
-          <div className="flex border-b border-white/30">
+          <div className="profile-tabs flex border-b border-white/30">
             {[
             { id: 'overview', label: 'Overview', icon: User },
             { id: 'projects', label: 'My Projects', icon: Home },
@@ -1538,7 +1559,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
               boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
             }}>
             
-              <div className="flex items-center justify-between mb-6">
+              <div className="profile-head-row flex items-center justify-between mb-6">
                 <h3 className="text-xl text-white drop-shadow-lg">Profile Information</h3>
                 <button
                 onClick={() => setIsEditing(!isEditing)}
@@ -1750,7 +1771,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
                   border: '1px solid rgba(255,255,255,0.2)',
                   boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
                 }}>
-                <div className="flex items-center justify-between mb-6">
+                <div className="profile-head-row flex items-center justify-between mb-6">
                   <div>
                     <h3 className="text-xl text-white drop-shadow-lg">Business Details</h3>
                     <p className="text-white text-sm drop-shadow-md mt-1">

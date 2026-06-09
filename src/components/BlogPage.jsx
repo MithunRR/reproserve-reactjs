@@ -236,8 +236,8 @@ export function BlogPage({ navigate }) {
             boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
           }}>
           
-          <div className="flex flex-row md:flex-row gap-4">
-            <div className="relative" style={{ width: '60%', minWidth: 0 }}>
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="relative w-full md:w-3/5 min-w-0">
               <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-white" />
               <input
                 placeholder="Search articles..."
@@ -246,7 +246,7 @@ export function BlogPage({ navigate }) {
                 className="w-full pl-10 pr-4 py-3 rounded-md border-2 border-white/30 bg-white/10 backdrop-blur-sm text-white placeholder-white/70 focus:outline-none focus:border-white/60" />
               
             </div>
-            <div className="relative category-dropdown" style={{ width: '40%', minWidth: 0 }}>
+            <div className="relative category-dropdown w-full md:w-2/5 min-w-0">
               <button
                 ref={categoryDropdownRef}
                 type="button"

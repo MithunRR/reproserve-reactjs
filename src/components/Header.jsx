@@ -221,11 +221,11 @@ export function Header({ currentUser, setCurrentUser }) {
     <header
       className="fixed top-0 left-0 right-0 z-50 w-full border-b border-white/20 transition-all duration-300"
       style={{
-        background: isScrolled ?
+        background: (isScrolled || isMenuOpen) ?
         'linear-gradient(135deg, rgba(0, 137, 225, 1) 0%, rgba(0, 69, 113, 1) 50%, rgba(0, 137, 225, 1) 100%)' :
         'transparent',
-        backdropFilter: isScrolled ? 'blur(20px)' : 'none',
-        WebkitBackdropFilter: isScrolled ? 'blur(20px)' : 'none'
+        backdropFilter: (isScrolled || isMenuOpen) ? 'blur(20px)' : 'none',
+        WebkitBackdropFilter: (isScrolled || isMenuOpen) ? 'blur(20px)' : 'none'
       }}>
       
       <div className="container mx-auto px-4">
@@ -612,7 +612,7 @@ export function Header({ currentUser, setCurrentUser }) {
               
                 Home
               </Link>
-              <div className="space-y-1">
+              <div className="space-y-1 real-estate-dropdown-container">
                 <button
                 onClick={() => setShowRealEstateDropdown(!showRealEstateDropdown)}
                 className="flex items-center justify-between w-full text-left py-2 text-white hover:text-white/80 drop-shadow-md">

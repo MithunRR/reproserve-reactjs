@@ -38,8 +38,12 @@ export function RequestDetailsModal({ isOpen, onClose, request, loading = false 
       }}
       onClick={onClose}>
 
+      {/* Phone-only: the desktop 50vw panel is far too narrow on a phone, so
+          widen it to ~full width and let height fit content. Desktop unchanged. */}
+      <style>{`@media (max-width: 767px){ .rdm-panel{ width: 92vw !important; height: auto !important; max-height: 85vh !important; } }`}</style>
+
       <div
-        className="relative rounded-2xl p-6 overflow-y-auto scrollbar-hide"
+        className="rdm-panel relative rounded-2xl p-6 overflow-y-auto scrollbar-hide"
         style={{
           zIndex: 100000,
           width: '50vw',

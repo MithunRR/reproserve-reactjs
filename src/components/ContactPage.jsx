@@ -111,6 +111,29 @@ export function ContactPage({ navigate }) {
           transform: translateY(0);
         }
       }
+
+      /* ===== PHONE-ONLY layout (laptops/desktops never match this) ===== */
+      @media (max-width: 767px) {
+        /* Smaller, tighter header */
+        .contact-header { margin-bottom: 2.5rem; }
+        .contact-header h1 { font-size: 2.25rem; line-height: 1.15; margin-bottom: 1rem; }
+        .contact-header p { font-size: 1rem; }
+        /* Tighter gap between the info and form columns */
+        .contact-grid { gap: 2rem; }
+        /* Form card uses less padding on small screens */
+        .contact-form-card { padding: 1.5rem; }
+        /* Submit row: note on top, full-width button below */
+        .contact-submit-row {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 1rem;
+        }
+        .contact-submit-row > p { text-align: center; }
+        .contact-submit-row > button {
+          width: 100%;
+          justify-content: center;
+        }
+      }
     `;
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
@@ -288,14 +311,14 @@ export function ContactPage({ navigate }) {
       
       <div className="container mx-auto max-w-7xl">
         {/* Header */}
-        <div className="text-center mb-16">
+        <div className="contact-header text-center mb-16">
           <h1 className="text-5xl md:text-5xl mb-8 text-white drop-shadow-lg">Connect Now</h1>
           <p className="text-xl md:text-2 text-white drop-shadow-md max-w-4xl mx-auto leading-relaxed">
             Ready to start your home improvement journey? Let's connect! We're here to help you find the perfect service providers and make your project a success.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-16">
+        <div className="contact-grid grid grid-cols-1 lg:grid-cols-3 gap-16">
           {/* Contact Information */}
           <div className="lg:col-span-1">
             <div
@@ -368,7 +391,7 @@ export function ContactPage({ navigate }) {
           {/* Contact Form */}
           <div className="lg:col-span-2">
             <div
-              className="rounded-2xl shadow-xl p-10 relative overflow-hidden"
+              className="contact-form-card rounded-2xl shadow-xl p-10 relative overflow-hidden"
               style={{
                 background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
                 backdropFilter: 'blur(20px)',
@@ -533,7 +556,7 @@ export function ContactPage({ navigate }) {
                 </div>
 
                 {/* Submit Button */}
-                <div className="flex items-center justify-between pt-4">
+                <div className="contact-submit-row flex items-center justify-between pt-4">
                   <p className="text-white drop-shadow-md">
                     Fields marked with * are required
                   </p>
