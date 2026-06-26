@@ -4,11 +4,12 @@ import {
   Filter, MapPin, Star, MessageSquare,
   ChevronDown, UserCheck, Calculator, Search as SearchIcon,
   ShieldCheck, ScrollText, Home,
-  CheckCircle, LocateFixed, Loader2, X } from
+  CheckCircle, LocateFixed, Loader2, X, List, Map as MapIcon } from
 'lucide-react';
 import apiClient from '../utils/api';
 import { MessagingModal } from './MessagingModal';
 import { QuoteRequestModal } from './QuoteRequestModal';
+import ProvidersMap from './ProvidersMap';
 import { useDispatch, useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
 import {
@@ -45,6 +46,7 @@ export function RealtorsPage({ navigate, currentUser }) {
     return '';
   });
   const [sortBy, setSortBy] = useState('rating');
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
   const [showMessagingModal, setShowMessagingModal] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
@@ -288,7 +290,10 @@ export function RealtorsPage({ navigate, currentUser }) {
     description: u.businessDesc || 'No description provided.',
     startingPrice: u.startingPrice || 'Contact for pricing',
     availability: u.availability || 'Contact for availability',
-    distanceKm: u.distanceKm != null ? Number(u.distanceKm) : null
+    distanceKm: u.distanceKm != null ? Number(u.distanceKm) : null,
+    latitude: u.latitude != null ? Number(u.latitude) : null,
+    longitude: u.longitude != null ? Number(u.longitude) : null,
+    profilePhoto: u.profilePhoto || null
   }));
 
 
@@ -701,24 +706,42 @@ export function RealtorsPage({ navigate, currentUser }) {
           {/* Provider Results */}
           <div className="lg:w-3/4">
             <div className="mb-6 flex justify-between items-center flex-wrap gap-2">
-              <p className="text-white drop-shadow-md">
-                {sortedProviders.length} realtors found
-                {selectedSubcategory && ` - ${selectedSubcategory}`}
-                {coords && ` within ${radiusKm} km`}
-              </p>
-              {coords &&
-                <p className="text-[11px] text-white/60">
-                  Geocoding ©{' '}
-                  <a
-                    href="https://www.openstreetmap.org/copyright"
-                    target="_blank" rel="noreferrer"
-                    className="underline hover:text-white">
-                    OpenStreetMap contributors
-                  </a>
+              <div className="flex items-center gap-3 flex-wrap">
+                <p className="text-white drop-shadow-md">
+                  {sortedProviders.length} realtors found
+                  {selectedSubcategory && ` - ${selectedSubcategory}`}
+                  {coords && ` within ${radiusKm} km`}
                 </p>
-              }
+                {coords &&
+                  <p className="text-[11px] text-white/60">
+                    Geocoding ©{' '}
+                    <a
+                      href="https://www.openstreetmap.org/copyright"
+                      target="_blank" rel="noreferrer"
+                      className="underline hover:text-white">
+                      OpenStreetMap contributors
+                    </a>
+                  </p>
+                }
+              </div>
+              {/* List | Map view toggle */}
+              <div className="flex items-center gap-1 p-1 rounded-lg bg-white/10 border border-white/20">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${viewMode === 'list' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}>
+                  <List className="h-4 w-4" /> List
+                </button>
+                <button
+                  onClick={() => setViewMode('map')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${viewMode === 'map' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}>
+                  <MapIcon className="h-4 w-4" /> Map
+                </button>
+              </div>
             </div>
 
+            {viewMode === 'map' ?
+            <ProvidersMap providers={sortedProviders} navigate={navigate} /> :
+            <>
             <div className="space-y-6">
               {sortedProviders.map((provider) =>
               <div
@@ -912,6 +935,8 @@ export function RealtorsPage({ navigate, currentUser }) {
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
                 </button>
               </div>
+            }
+            </>
             }
           </div>
         </div>

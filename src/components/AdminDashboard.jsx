@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
+import axios from 'axios';
 import {
   Users, Briefcase, Home, ShieldCheck, FileText, Building,
   CalendarDays, Star, TrendingUp, LogOut, MessageSquare, Mail, Phone,
-  Check, Trash2, X, MapPin, BadgeCheck, FileBadge, UserCheck, Clock
+  Check, Trash2, X, MapPin, BadgeCheck, FileBadge, UserCheck, Clock, BarChart3
 } from 'lucide-react';
 import {
   fetchAdminStatsStart, logout,
@@ -16,6 +17,8 @@ import {
   setApprovalStart
 } from '../Store/Features/Authentication/authslice';
 import { currentUserStorage } from '../utils/localStorage';
+import { baseUrl } from '../utils/ConfigUrl';
+import GrowthCharts from './admin/GrowthCharts';
 
 // Rendered by ProfilePage when currentUser.role === 'admin'. Pulls counts +
 // recent activity from /api/admin/stats and renders a compact dashboard.
@@ -30,11 +33,40 @@ export function AdminDashboard({ navigate, currentUser, setCurrentUser }) {
   const [openMessage, setOpenMessage] = useState(null); // {id, name, ...} | null
   const [openPending, setOpenPending] = useState(null); // user record | null
 
+  // Platform Analytics — growth series from /api/admin/stats/growth. Fetched
+  // locally (same axios + Bearer-token pattern as the admin-stats saga) so the
+  // charts degrade gracefully without touching the redux store.
+  const [growth, setGrowth] = useState({ series: null, loading: true, error: null });
+
   useEffect(() => {
     dispatch(fetchAdminStatsStart());
     dispatch(fetchContactMessagesStart());
     dispatch(fetchPendingApprovalsStart());
   }, [dispatch]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    setGrowth({ series: null, loading: true, error: null });
+    axios
+      .get(`${baseUrl}/admin/stats/growth`, {
+        headers: { Authorization: token ? `Bearer ${token}` : '' }
+      })
+      .then((res) => {
+        if (cancelled) return;
+        const series = res?.data?.data?.series;
+        setGrowth({
+          series: Array.isArray(series) ? series : [],
+          loading: false,
+          error: Array.isArray(series) ? null : 'No data'
+        });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setGrowth({ series: null, loading: false, error: err?.message || 'Failed to load analytics' });
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const decide = (user, status) => {
     const label = status === 'approved' ? 'approve' : 'reject';
@@ -63,6 +95,14 @@ export function AdminDashboard({ navigate, currentUser, setCurrentUser }) {
   const r = adminStats?.recent || {};
   const last24h = adminStats?.last24h || {};
 
+  // Role distribution for the "at a glance" donut (uses counts already loaded).
+  const roleData = [
+    { name: 'Users',     value: c.users     ?? 0, color: '#0089e1' },
+    { name: 'Providers', value: c.providers ?? 0, color: '#33a1e8' },
+    { name: 'Realtors',  value: c.realtors  ?? 0, color: '#006eb5' },
+    { name: 'Admins',    value: c.admins    ?? 0, color: '#ffd200' }
+  ];
+
   return (
     <div
       className="px-4 min-h-screen"
@@ -81,9 +121,9 @@ export function AdminDashboard({ navigate, currentUser, setCurrentUser }) {
 
       <div className="container mx-auto max-w-6xl">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-8">
+        <div className="flex flex-row items-center justify-between gap-3 mb-5 sm:mb-8">
           <div>
-            <h1 className="text-3xl text-white drop-shadow-lg mb-1">Admin Dashboard</h1>
+            <h1 className="text-2xl sm:text-3xl text-white drop-shadow-lg mb-1">Admin Dashboard</h1>
             <p className="text-white drop-shadow-md text-sm">
               Welcome back, <span className="font-semibold">{currentUser?.name || 'Admin'}</span> ·
               {' '}<span className="text-white/80">{currentUser?.email}</span>
@@ -91,7 +131,7 @@ export function AdminDashboard({ navigate, currentUser, setCurrentUser }) {
           </div>
           <button
             onClick={handleLogout}
-            className="px-4 py-2 rounded-xl border-2 border-white/30 text-white hover:bg-white/20 hover:border-white/50 transition-all duration-300 font-semibold flex items-center gap-2 self-start md:self-end">
+            className="shrink-0 px-3 sm:px-4 py-2 rounded-xl border-2 border-white/30 text-white hover:bg-white/20 hover:border-white/50 transition-all duration-300 font-semibold flex items-center gap-2 self-start md:self-end">
             <LogOut className="h-4 w-4" /> Log out
           </button>
         </div>
@@ -106,14 +146,14 @@ export function AdminDashboard({ navigate, currentUser, setCurrentUser }) {
         {adminStats &&
           <>
             {/* KPI strip */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-3 sm:mb-6">
               <Kpi icon={Users}      label="Users"             value={c.users     ?? 0} accent="#0089e1" />
               <Kpi icon={Briefcase}  label="Service Providers" value={c.providers ?? 0} accent="#0089e1" />
               <Kpi icon={Home}       label="Realtors"          value={c.realtors  ?? 0} accent="#0089e1" />
               <Kpi icon={ShieldCheck} label="Admins"           value={c.admins    ?? 0} accent="#ffd200" />
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-8">
               <Kpi icon={FileText}    label="Quote Requests"    value={c.quotes     ?? 0} accent="#0089e1" />
               <Kpi icon={Building}    label="Property Listings" value={c.listings   ?? 0} accent="#0089e1" />
               <Kpi icon={CalendarDays} label="Open Houses"      value={c.openHouses ?? 0} accent="#0089e1" />
@@ -123,8 +163,8 @@ export function AdminDashboard({ navigate, currentUser, setCurrentUser }) {
             </div>
 
             {/* Last 24h */}
-            <Panel className="mb-8">
-              <h2 className="text-lg text-white drop-shadow-lg mb-3 flex items-center gap-2">
+            <Panel className="mb-4 sm:mb-6">
+              <h2 className="text-base sm:text-lg text-white drop-shadow-lg mb-3 flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" /> Last 24 hours
               </h2>
               <div className="grid grid-cols-2 gap-4 text-white">
@@ -133,10 +173,23 @@ export function AdminDashboard({ navigate, currentUser, setCurrentUser }) {
               </div>
             </Panel>
 
+            {/* Platform Analytics — recharts driven by /api/admin/stats/growth */}
+            <div className="mb-2 flex items-center gap-2">
+              <h2 className="text-lg sm:text-xl text-white drop-shadow-lg flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" /> Platform Analytics
+              </h2>
+            </div>
+            <GrowthCharts
+              series={growth.series}
+              loading={growth.loading}
+              error={growth.error}
+              roleData={roleData}
+            />
+
             {/* Recent activity */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               <Panel>
-                <h2 className="text-lg text-white drop-shadow-lg mb-3 flex items-center gap-2">
+                <h2 className="text-base sm:text-lg text-white drop-shadow-lg mb-3 flex items-center gap-2">
                   <Users className="h-5 w-5" /> Recent Signups
                 </h2>
                 <List
@@ -151,7 +204,7 @@ export function AdminDashboard({ navigate, currentUser, setCurrentUser }) {
               </Panel>
 
               <Panel>
-                <h2 className="text-lg text-white drop-shadow-lg mb-3 flex items-center gap-2">
+                <h2 className="text-base sm:text-lg text-white drop-shadow-lg mb-3 flex items-center gap-2">
                   <FileText className="h-5 w-5" /> Recent Quote Requests
                 </h2>
                 <List
@@ -171,7 +224,7 @@ export function AdminDashboard({ navigate, currentUser, setCurrentUser }) {
               </Panel>
 
               <Panel className="lg:col-span-2">
-                <h2 className="text-lg text-white drop-shadow-lg mb-3 flex items-center gap-2">
+                <h2 className="text-base sm:text-lg text-white drop-shadow-lg mb-3 flex items-center gap-2">
                   <Building className="h-5 w-5" /> Recent Property Listings
                 </h2>
                 <List
@@ -475,23 +528,23 @@ const panelStyle = {
 
 function Panel({ children, className = '' }) {
   return (
-    <div className={`rounded-2xl p-6 ${className}`} style={panelStyle}>{children}</div>);
+    <div className={`rounded-2xl p-4 sm:p-6 ${className}`} style={panelStyle}>{children}</div>);
 }
 
 function Kpi({ icon: Icon, label, value, accent }) {
   return (
-    <div className="rounded-2xl p-5 relative overflow-hidden" style={panelStyle}>
-      <div className="flex items-center gap-3 mb-2">
-        <div style={{
-          width: 38, height: 38, borderRadius: 10,
+    <div className="rounded-2xl p-3 sm:p-5 relative overflow-hidden" style={panelStyle}>
+      <div className="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2">
+        <div className="shrink-0" style={{
+          width: 34, height: 34, borderRadius: 10,
           background: `${accent}22`, border: `1px solid ${accent}55`,
           display: 'flex', alignItems: 'center', justifyContent: 'center'
         }}>
-          <Icon className="h-5 w-5 text-white" />
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
         </div>
-        <div className="text-sm text-white drop-shadow-md">{label}</div>
+        <div className="text-xs sm:text-sm text-white drop-shadow-md leading-tight">{label}</div>
       </div>
-      <div className="text-3xl text-white font-bold drop-shadow-lg">{value}</div>
+      <div className="text-2xl sm:text-3xl text-white font-bold drop-shadow-lg">{value}</div>
     </div>);
 }
 

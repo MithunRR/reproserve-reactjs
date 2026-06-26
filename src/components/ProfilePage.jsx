@@ -15,6 +15,7 @@ import {
 
   profileImageStorage } from
 '../utils/localStorage';
+import apiClient from '../utils/api';
 import {
   fetchProfileStart,
   updateProfileStart,
@@ -134,6 +135,16 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
           align-items: flex-start;
           gap: 0.75rem;
         }
+        /* Mobile-first compaction: trim oversized page chrome and the large
+           p-8 glass panels so phones scroll less. */
+        .profile-page { padding-left: 0.75rem; padding-right: 0.75rem; }
+        .profile-page .profile-page-head { margin-bottom: 1.25rem; }
+        .profile-page .profile-page-head h1 { font-size: 1.6rem; line-height: 1.2; }
+        .profile-page .profile-tabs-card { margin-bottom: 1.25rem; }
+        /* Shrink the generous p-8 padding inside dashboard/settings cards. */
+        .profile-page .p-8 { padding: 1.25rem; }
+        /* Tighten the big vertical rhythm between stacked sections. */
+        .profile-page .space-y-8 > * + * { margin-top: 1.25rem; }
       }
     `;
     document.head.appendChild(style);
@@ -146,6 +157,10 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
   notificationSettingsStorage.get(userId)
   );
   const [profileImage, setProfileImage] = useState(() => profileImageStorage.get(userId));
+  // Trust-indicator profile photo (business roles). Stored server-side under
+  // /uploads and surfaced on the public profile + search results.
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState(currentUser?.profilePhoto || null);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const defaultProfileData = {
     firstName: currentUser?.name?.split(' ')[0] || '',
     lastName: currentUser?.name?.split(' ')[1] || '',
@@ -159,7 +174,11 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
     // Business fields — populated only for service_provider / realtor users.
     businessName: '',
     serviceTypeId: '',
-    licenseNumber: ''
+    licenseNumber: '',
+    // Trust-indicator fields — service_provider / realtor only.
+    specialties: '',
+    responseTime: '',
+    yearsOfExperience: ''
   };
   const [profileData, setProfileData] = useState(() => {
     const saved = profileDataStorage.get(userId);
@@ -210,9 +229,17 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
       businessName: apiProfileData.businessName ?? prev.businessName ?? '',
       serviceTypeId: apiProfileData.serviceTypeId ?? prev.serviceTypeId ?? '',
       licenseNumber: apiProfileData.licenseNumber ?? prev.licenseNumber ?? '',
+      specialties: Array.isArray(apiProfileData.specialties)
+        ? apiProfileData.specialties.join(', ')
+        : (apiProfileData.specialties ?? prev.specialties ?? ''),
+      responseTime: apiProfileData.responseTime ?? prev.responseTime ?? '',
+      yearsOfExperience: apiProfileData.yearsOfExperience != null
+        ? apiProfileData.yearsOfExperience
+        : (prev.yearsOfExperience ?? ''),
       latitude: apiProfileData.latitude != null ? Number(apiProfileData.latitude) : null,
       longitude: apiProfileData.longitude != null ? Number(apiProfileData.longitude) : null
     }));
+    if (apiProfileData.profilePhoto) setProfilePhotoUrl(apiProfileData.profilePhoto);
   }, [apiProfileData]);
 
   // Load the service-types catalog once — populates the Business Details dropdown
@@ -324,10 +351,53 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
         // serviceTypeId is accepted; controller resolves it via resolveServiceTypeId
         serviceTypeId: profileData.serviceTypeId || null,
         businessDesc: profileData.bio,
-        licenseNumber: profileData.licenseNumber.trim() || null
+        licenseNumber: profileData.licenseNumber.trim() || null,
+        // Trust indicators — backend accepts a comma-separated specialties string.
+        specialties: profileData.specialties,
+        responseTime: profileData.responseTime || null,
+        yearsOfExperience:
+          profileData.yearsOfExperience === '' || profileData.yearsOfExperience == null
+            ? null
+            : Number(profileData.yearsOfExperience)
       }
     }));
     setIsEditingBusiness(false);
+  };
+
+  // Immediate, standalone upload of the business profile photo. POSTs the file
+  // as multipart/form-data ("photo") to /api/profile/photo. The request
+  // interceptor on apiClient attaches the Bearer token.
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!currentUser?.id) {
+      toast.error('Please sign in to upload a photo.');
+      return;
+    }
+    const fd = new FormData();
+    fd.append('photo', file);
+    setPhotoUploading(true);
+    try {
+      const res = await apiClient.post('/api/profile/photo', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const url = res?.data?.data?.profilePhoto;
+      if (url) {
+        setProfilePhotoUrl(url);
+        if (typeof setCurrentUser === 'function') {
+          setCurrentUser((prev) => (prev ? { ...prev, profilePhoto: url } : prev));
+        }
+        toast.success('Profile photo updated');
+      } else {
+        toast.error('Photo upload failed');
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to upload photo');
+    } finally {
+      setPhotoUploading(false);
+      // Allow re-selecting the same file.
+      if (e.target) e.target.value = '';
+    }
   };
 
   const handleQuoteSubmit = (formData) => {
@@ -772,13 +842,39 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
 
   }
 
+  // Role-appropriate Quick Actions for the Overview tab. "Create Open House"
+  // is hidden for service providers (the app already restricts it to
+  // users/realtors). There is no standalone messages route, so "View Messages"
+  // jumps to the relevant requests/quotes tab where conversations live.
+  const quickActions = [
+    { key: 'quote', label: 'Request a Quote', icon: Upload, onClick: () => setShowQuoteModal(true) },
+    { key: 'find', label: 'Find a Provider', icon: User, onClick: () => navigate('find-providers') },
+    ...(currentUser?.role !== 'provider'
+      ? [{
+          key: 'openhouse', label: 'Create Open House', icon: Plus, onClick: () => {
+            if (currentUser) {
+              localStorage.setItem('openCreateOpenHouseModal', 'true');
+              navigate('open-house');
+            } else {
+              localStorage.setItem('pendingRedirect', '/open-house');
+              navigate('login');
+            }
+          }
+        }]
+      : []),
+    (currentUser?.role === 'realtor'
+      ? { key: 'showings', label: 'View Showings', icon: Building, onClick: () => setActiveTab('showings') }
+      : { key: 'showings', label: 'Show My Property', icon: Building, onClick: () => navigate('show-my-property') }),
+    { key: 'messages', label: 'View Messages', icon: MessageSquare, onClick: () => setActiveTab(isBusinessRole ? 'requests' : 'quotes') }
+  ];
+
   const renderOverview = () =>
-  <div className="space-y-8 animate-fadeIn">
+  <div className="space-y-6 animate-fadeIn">
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
         <div
         onClick={() => setActiveTab('projects')}
-        className="rounded-2xl shadow-lg p-6 text-center relative overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105"
+        className="rounded-2xl shadow-lg p-4 sm:p-6 text-center relative overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105"
         style={{
           background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
           backdropFilter: 'blur(20px)',
@@ -791,7 +887,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
         </div>
         <div
         onClick={() => setActiveTab('favorites')}
-        className="rounded-2xl shadow-lg p-6 text-center relative overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105"
+        className="rounded-2xl shadow-lg p-4 sm:p-6 text-center relative overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105"
         style={{
           background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
           backdropFilter: 'blur(20px)',
@@ -804,7 +900,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
         </div>
         <div
         onClick={() => setActiveTab('quotes')}
-        className="rounded-2xl shadow-lg p-6 text-center relative overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105"
+        className="rounded-2xl shadow-lg p-4 sm:p-6 text-center relative overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105"
         style={{
           background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
           backdropFilter: 'blur(20px)',
@@ -817,36 +913,31 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
         </div>
       </div>
 
-      {/* Create Open House Button */}
+      {/* Quick Actions — prominent shortcuts to the most common tasks so users
+          can act immediately after login. Role-appropriate. */}
       <div
-      className="rounded-2xl p-6 relative overflow-hidden"
+      className="rounded-2xl p-4 sm:p-6 relative overflow-hidden"
       style={{
         background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
         backdropFilter: 'blur(20px)',
         border: '1px solid rgba(255,255,255,0.2)',
         boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
       }}>
-      
-        <div className="profile-head-row flex items-center justify-between">
-          <div>
-            <h3 className="text-xl text-white mb-2 drop-shadow-lg">Create Open House</h3>
-            <p className="text-sm text-white drop-shadow-md">List a new property open house for potential buyers</p>
-          </div>
-          <button
-          onClick={() => {
-            if (currentUser) {
-              localStorage.setItem('openCreateOpenHouseModal', 'true');
-              navigate('open-house');
-            } else {
-              localStorage.setItem('pendingRedirect', '/open-house');
-              navigate('login');
-            }
-          }}
-          className="px-6 py-3 bg-coral-orange text-black rounded-xl hover:bg-coral-orange/90 hover:scale-105 transition-all duration-300 flex items-center space-x-2 font-semibold shadow-lg">
-          
-            <Plus className="h-5 w-5" />
-            <span>Create Open House</span>
-          </button>
+        <h3 className="text-lg sm:text-xl text-white mb-4 drop-shadow-lg">Quick Actions</h3>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          {quickActions.map((action) => {
+            const ActionIcon = action.icon;
+            return (
+              <button
+                key={action.key}
+                onClick={action.onClick}
+                className="group flex flex-col items-center justify-center text-center gap-2 p-3 sm:p-4 rounded-xl bg-white/10 border border-white/20 hover:bg-white/20 hover:scale-105 transition-all duration-300 shadow-lg">
+                <span className="flex items-center justify-center h-10 w-10 rounded-full bg-coral-orange/90 text-black group-hover:bg-coral-orange transition-colors duration-300">
+                  <ActionIcon className="h-5 w-5" />
+                </span>
+                <span className="text-xs sm:text-sm font-semibold text-white drop-shadow-md leading-tight">{action.label}</span>
+              </button>);
+          })}
         </div>
       </div>
     </div>;
@@ -1473,7 +1564,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
 
   return (
     <div
-      className="px-4 min-h-screen"
+      className="profile-page px-4 min-h-screen"
       style={{
         background: `
           radial-gradient(ellipse at top right, #0089e1 0%, transparent 50%),
@@ -1489,14 +1580,14 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
 
       <div className="container mx-auto max-w-6xl">
         {/* Header */}
-        <div className="mb-8">
+        <div className="profile-page-head mb-8">
           <h1 className="text-3xl text-white drop-shadow-lg mb-2">My Profile</h1>
           <p className="text-white drop-shadow-md">Manage your account and track your projects</p>
         </div>
 
         {/* Navigation Tabs */}
         <div
-          className="rounded-2xl shadow-lg mb-8 relative overflow-hidden"
+          className="profile-tabs-card rounded-2xl shadow-lg mb-8 relative overflow-hidden"
           style={{
             background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
             backdropFilter: 'blur(20px)',
@@ -1786,6 +1877,39 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
                   </button>
                 </div>
 
+                {/* Profile Photo — uploads immediately to /api/profile/photo. */}
+                <div className="flex items-center gap-4 mb-6 pb-6 border-b border-white/15">
+                  <div className="relative shrink-0">
+                    {profilePhotoUrl ?
+                      <img
+                        src={profilePhotoUrl}
+                        alt="Profile"
+                        className="h-20 w-20 rounded-full object-cover border-2 border-white/30" /> :
+                      <div className="h-20 w-20 rounded-full bg-white/15 border-2 border-white/30 flex items-center justify-center">
+                        <Camera className="h-6 w-6 text-white/70" />
+                      </div>
+                    }
+                  </div>
+                  <div>
+                    <label className="block text-white font-medium mb-2 drop-shadow-md text-sm">Profile Photo</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      id="business-photo-upload"
+                      className="hidden"
+                      onChange={handlePhotoUpload} />
+                    <label
+                      htmlFor="business-photo-upload"
+                      className={`inline-flex items-center gap-2 px-4 py-2 bg-sky-blue text-white rounded-xl hover:bg-sky-blue/90 transition-all duration-300 font-semibold shadow-lg cursor-pointer ${photoUploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                      {photoUploading
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Camera className="h-4 w-4" />}
+                      <span>{photoUploading ? 'Uploading…' : 'Upload Photo'}</span>
+                    </label>
+                    <p className="text-xs text-white/70 mt-2">Shown on your public profile and in search results.</p>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Business Name */}
                   <div>
@@ -1844,6 +1968,73 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
                         className="w-full px-3 py-2 border-2 border-white/30 bg-white/10 backdrop-blur-sm text-white placeholder-white/70 rounded focus:outline-none focus:border-white/60" /> :
                       <p className="text-white drop-shadow-md">
                         {profileData.licenseNumber || 'NA'}
+                      </p>
+                    }
+                  </div>
+
+                  {/* Specialties (comma-separated) */}
+                  <div>
+                    <label className="block text-white font-medium mb-2 drop-shadow-md text-sm">
+                      Specialties
+                    </label>
+                    {isEditingBusiness ?
+                      <>
+                        <input
+                          type="text"
+                          name="specialties"
+                          value={profileData.specialties}
+                          onChange={handleInputChange}
+                          placeholder="e.g. Leak Repair, Pipe Installation"
+                          className="w-full px-3 py-2 border-2 border-white/30 bg-white/10 backdrop-blur-sm text-white placeholder-white/70 rounded focus:outline-none focus:border-white/60" />
+                        <p className="text-xs text-white/60 mt-1">Separate each specialty with a comma.</p>
+                      </> :
+                      <p className="text-white drop-shadow-md">
+                        {profileData.specialties || <span className="text-white/60 italic">Not set</span>}
+                      </p>
+                    }
+                  </div>
+
+                  {/* Response Time */}
+                  <div>
+                    <label className="block text-white font-medium mb-2 drop-shadow-md text-sm">
+                      Response Time
+                    </label>
+                    {isEditingBusiness ?
+                      <select
+                        name="responseTime"
+                        value={profileData.responseTime || ''}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border-2 border-white/30 bg-white/10 backdrop-blur-sm text-white rounded focus:outline-none focus:border-white/60">
+                        <option value="" className="text-slate-900">— Select —</option>
+                        <option value="Within 1 hour" className="text-slate-900">Within 1 hour</option>
+                        <option value="Within a few hours" className="text-slate-900">Within a few hours</option>
+                        <option value="Within a day" className="text-slate-900">Within a day</option>
+                        <option value="Within 2 days" className="text-slate-900">Within 2 days</option>
+                      </select> :
+                      <p className="text-white drop-shadow-md">
+                        {profileData.responseTime || <span className="text-white/60 italic">Not set</span>}
+                      </p>
+                    }
+                  </div>
+
+                  {/* Years of Experience */}
+                  <div>
+                    <label className="block text-white font-medium mb-2 drop-shadow-md text-sm">
+                      Years of Experience
+                    </label>
+                    {isEditingBusiness ?
+                      <input
+                        type="number"
+                        min="0"
+                        name="yearsOfExperience"
+                        value={profileData.yearsOfExperience}
+                        onChange={handleInputChange}
+                        placeholder="e.g. 5"
+                        className="w-full px-3 py-2 border-2 border-white/30 bg-white/10 backdrop-blur-sm text-white placeholder-white/70 rounded focus:outline-none focus:border-white/60" /> :
+                      <p className="text-white drop-shadow-md">
+                        {(profileData.yearsOfExperience !== '' && profileData.yearsOfExperience != null)
+                          ? `${profileData.yearsOfExperience} year${Number(profileData.yearsOfExperience) === 1 ? '' : 's'}`
+                          : <span className="text-white/60 italic">Not set</span>}
                       </p>
                     }
                   </div>

@@ -95,8 +95,14 @@ export function ProviderProfilePage({ navigate }) {
     employeeCount: '—',
     licenseNumber: p.licenseNumber || 'NA',
     insuranceProvider: '—',
-    responseTime: '24 hours',
-    specialties: p.serviceType?.name ? [p.serviceType.name] : [],
+    // Real trust indicators from the backend, with graceful fallbacks.
+    profilePhoto: p.profilePhoto || null,
+    responseTime: p.responseTime || 'Contact for availability',
+    yearsOfExperience: p.yearsOfExperience != null ? Number(p.yearsOfExperience) : null,
+    badges: Array.isArray(p.badges) ? p.badges : [],
+    specialties: Array.isArray(p.specialties) && p.specialties.length
+      ? p.specialties
+      : (p.serviceType?.name ? [p.serviceType.name] : []),
     description: p.businessDesc || 'No description provided.',
     serviceAreas: [p.city, p.state].filter(Boolean),
     pricing: {
@@ -105,7 +111,9 @@ export function ProviderProfilePage({ navigate }) {
       consultationFee: 'Contact'
     },
     availability: p.isActive !== false ? 'Available' : 'Unavailable',
-    certifications: p.id ? ['Verified Account'] : []
+    certifications: (Array.isArray(p.badges) && p.badges.length)
+      ? p.badges
+      : (p.id ? ['Verified Account'] : [])
   };
 
   const handleQuoteSubmit = (data) => {
@@ -198,7 +206,16 @@ export function ProviderProfilePage({ navigate }) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Basic Info */}
           <div className="text-center lg:text-left">
-            <div className="h-32 w-32 rounded-full bg-white flex items-center justify-center text-white text-4xl font-bold mx-auto lg:mx-0 mb-4">
+            {providerData.profilePhoto ?
+            <img
+              src={providerData.profilePhoto}
+              alt={providerData.name}
+              className="h-32 w-32 rounded-full object-cover border-2 border-white/40 mx-auto lg:mx-0 mb-4"
+              onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling.style.display = 'flex'; }} /> :
+            null}
+            <div
+              className="h-32 w-32 rounded-full bg-sky-blue items-center justify-center text-white text-4xl font-bold mx-auto lg:mx-0 mb-4"
+              style={{ display: providerData.profilePhoto ? 'none' : 'flex' }}>
               {providerData.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}
             </div>
             <h3 className="text-xl text-white mb-2 drop-shadow-md">{providerData.name}</h3>
@@ -208,12 +225,19 @@ export function ProviderProfilePage({ navigate }) {
               <span className="text-white font-medium drop-shadow-md">{providerData.rating}</span>
               <span className="text-white drop-shadow-md">({providerData.reviewCount} reviews)</span>
             </div>
-            {providerData.verified &&
-          <div className="flex items-center justify-center lg:justify-start space-x-1 mb-4">
-                <ThumbsUp className="h-4 w-4 text-white" />
-                <span className="text-white text-sm drop-shadow-md">Verified Provider</span>
-              </div>
-          }
+            {/* Trust badges (falls back to a Verified pill when none provided) */}
+            {(providerData.badges.length > 0 || providerData.verified) &&
+            <div className="flex flex-wrap justify-center lg:justify-start gap-2 mb-4">
+              {(providerData.badges.length > 0 ? providerData.badges : ['Verified']).map((badge, index) =>
+              <span
+                key={index}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium text-white bg-white/20 backdrop-blur-sm border border-white/30">
+                <Shield className="h-3 w-3" />
+                {badge}
+              </span>
+              )}
+            </div>
+            }
           </div>
 
           {/* Contact & Location */}
@@ -243,8 +267,8 @@ export function ProviderProfilePage({ navigate }) {
             <h4 className="text-white font-medium mb-4 drop-shadow-md">Business Information</h4>
             <div className="space-y-3">
               <div>
-                <span className="text-sm text-white drop-shadow-md">Years in Business:</span>
-                <p className="text-white drop-shadow-md">{providerData.yearsInBusiness} years</p>
+                <span className="text-sm text-white drop-shadow-md">{providerData.yearsOfExperience != null ? 'Years of Experience:' : 'Years in Business:'}</span>
+                <p className="text-white drop-shadow-md">{providerData.yearsOfExperience != null ? providerData.yearsOfExperience : providerData.yearsInBusiness} years</p>
               </div>
               <div>
                 <span className="text-sm text-white drop-shadow-md">Projects Completed:</span>
@@ -356,7 +380,7 @@ export function ProviderProfilePage({ navigate }) {
               <span className="text-white drop-shadow-md">{providerData.availability}</span>
             </div>
             <p className="text-sm text-white drop-shadow-md">
-              Typically responds within {providerData.responseTime}
+              Response time: {providerData.responseTime}
             </p>
             <button className="w-full py-2 bg-sky-blue text-white rounded-xl hover:bg-sky-blue/90 hover:scale-105 transition-all duration-300 font-semibold">
               Check Availability

@@ -451,11 +451,11 @@ export function HomePage({ navigate }) {
             linear-gradient(225deg, #004571, #001624)
           `,
           paddingTop: '80px',
-          paddingBottom: '64px',
+          paddingBottom: '24px',
           marginTop: '-65px'
         }}>
         
-        <div className="container mx-auto max-w-6xl text-center mt-8">
+        <div className="container mx-auto max-w-6xl text-center mt-4">
           <h1 className="text-3xl md:text-4xl mb-4 text-white drop-shadow-lg">
             Find Trusted Professionals for Every Step
           </h1>
@@ -464,7 +464,7 @@ export function HomePage({ navigate }) {
           </p>
 
           {/* Search Form */}
-          <form onSubmit={handleSearch} className="scroll-float scroll-float-delay-2 flex flex-col md:flex-row gap-4 max-w-2xl mx-auto mb-12 relative">
+          <form onSubmit={handleSearch} className="scroll-float scroll-float-delay-2 flex flex-col md:flex-row gap-4 max-w-2xl mx-auto mb-6 relative">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-white z-10" />
               <input
@@ -581,8 +581,8 @@ export function HomePage({ navigate }) {
           )}
 
           {/* Featured Realtor Services */}
-          <div className="scroll-float scroll-float-delay-3 mb-12">
-            <div className="realtor-cards-row flex flex-nowrap gap-6 max-w-7xl mx-auto overflow-x-auto scrollbar-hide">
+          <div className="scroll-float scroll-float-delay-3 mb-5">
+            <div className="realtor-cards-row flex flex-nowrap gap-6 max-w-7xl mx-auto overflow-visible">
               {realtorCategories[0].services.map((service, serviceIndex) => {
                 const IconComponent = service.icon;
                 const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -615,9 +615,9 @@ export function HomePage({ navigate }) {
                         navigate('realtors');
                       }
                     }}
-                    className="group relative bg-white/10 backdrop-blur-md p-4 shadow-lg hover:shadow-2xl transition-all duration-500 border border-white/30 hover:border-white/60 transform skew-x-12 hover:skew-x-6 hover:scale-105 hover:bg-white/20 flex-1 min-w-0 overflow-hidden cursor-pointer"
+                    className="group relative bg-white/10 backdrop-blur-md p-4 shadow-lg hover:shadow-2xl transition-all duration-500 border border-white/30 hover:border-white/60 transform -skew-x-12 hover:bg-white/20 flex-1 min-w-0 overflow-hidden cursor-pointer"
                     style={{
-                      clipPath: 'polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%)',
+                      clipPath: 'none',
                       background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
                       boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
                     }}>
@@ -632,7 +632,7 @@ export function HomePage({ navigate }) {
 
                     }
                     {/* Content */}
-                    <div className="relative z-10 text-center transform -skew-x-12 group-hover:-skew-x-6 transition-transform duration-300">
+                    <div className="relative z-10 text-center transform skew-x-12">
                       {/* Icon */}
                       <div className="mb-3 flex justify-center">
                         <IconComponent className="h-8 w-8 text-white drop-shadow-lg" />
@@ -650,7 +650,7 @@ export function HomePage({ navigate }) {
           </div>
 
           {/* Featured Service Provider Categories */}
-          <div className="scroll-float scroll-float-delay-4 mb-12">
+          <div className="scroll-float scroll-float-delay-4 mb-5">
             <div className="provider-cards-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 max-w-7xl mx-auto">
               {[
               {
@@ -711,9 +711,9 @@ export function HomePage({ navigate }) {
                       localStorage.setItem('selectedProviderCategory', service.category);
                       navigate('find-providers');
                     }}
-                    className="group relative bg-white/10 backdrop-blur-md p-4 shadow-lg hover:shadow-2xl transition-all duration-500 border border-white/30 hover:border-white/60 transform skew-x-12 hover:skew-x-6 hover:scale-105 hover:bg-white/20 overflow-hidden cursor-pointer"
+                    className="group relative bg-white/10 backdrop-blur-md p-4 shadow-lg hover:shadow-2xl transition-all duration-500 border border-white/30 hover:border-white/60 transform -skew-x-12 hover:bg-white/20 overflow-hidden cursor-pointer"
                     style={{
-                      clipPath: 'polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%)',
+                      clipPath: 'none',
                       background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
                       boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
                     }}>
@@ -728,7 +728,7 @@ export function HomePage({ navigate }) {
 
                     }
                     {/* Content */}
-                    <div className="relative z-10 text-center transform -skew-x-12 group-hover:-skew-x-6 transition-transform duration-300">
+                    <div className="relative z-10 text-center transform skew-x-12">
                       {/* Icon */}
                       <div className="mb-3 flex justify-center">
                         <IconComponent className="h-8 w-8 text-white drop-shadow-lg" />
@@ -746,7 +746,7 @@ export function HomePage({ navigate }) {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8">
             <div className="text-center">
               <div className="text-3xl mb-2 text-white drop-shadow-lg">50,000+</div>
               <p className="text-white drop-shadow-md">Verified Professionals</p>
@@ -764,9 +764,9 @@ export function HomePage({ navigate }) {
       </section>
 
       {/* Featured Providers */}
-      <section className="scroll-float py-16 px-4 bg-powder-blue/20">
+      <section className="scroll-float py-6 px-4 bg-powder-blue/20">
         <div className="container mx-auto max-w-7xl">
-          <div className="text-center mb-12">
+          <div className="text-center mb-5">
             <h2 className="scroll-float text-3xl md:text-4xl mb-4 text-cool-gray">
               Featured Service Providers
             </h2>
@@ -879,7 +879,7 @@ export function HomePage({ navigate }) {
           </div>
           }
 
-          <div className="text-center mt-8">
+          <div className="text-center mt-4">
             <button
               onClick={() => navigate('find-providers')}
               className="px-6 py-3 rounded-md bg-dark-blue text-white transition-colors hover:opacity-90">
@@ -891,9 +891,9 @@ export function HomePage({ navigate }) {
       </section>
 
       {/* Service Categories Preview */}
-      <section className="scroll-float py-16 px-4 bg-snow-white">
+      <section className="scroll-float py-6 px-4 bg-snow-white">
         <div className="container mx-auto max-w-7xl">
-          <div className="text-center mb-12">
+          <div className="text-center mb-5">
             <h2 className="scroll-float text-3xl md:text-4xl mb-4 text-cool-gray">
               Find the Right Professional for Your Project
             </h2>
@@ -956,7 +956,7 @@ export function HomePage({ navigate }) {
             )}
           </div>
 
-          <div className="text-center mt-8">
+          <div className="text-center mt-4">
             <button
               onClick={() => navigate('find-providers')}
               className="px-6 py-3 rounded-md bg-dark-blue text-white transition-colors hover:opacity-90">
@@ -968,9 +968,9 @@ export function HomePage({ navigate }) {
       </section>
 
       {/* How It Works */}
-      <section className="scroll-float py-16 px-4 bg-snow-white">
+      <section className="scroll-float py-6 px-4 bg-snow-white">
         <div className="container mx-auto max-w-6xl">
-          <div className="text-center mb-12">
+          <div className="text-center mb-5">
             <h2 className="scroll-float text-3xl md:text-4xl mb-4 text-cool-gray">How ReproServe Works</h2>
             <p className="scroll-float scroll-float-delay-1 text-xl text-cool-gray">Simple steps to find and hire the perfect professional</p>
           </div>

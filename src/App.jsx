@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { createPortal } from 'react-dom';
 import { ArrowUp } from 'lucide-react';
@@ -18,7 +18,6 @@ import { FindProvidersPage } from './components/FindProvidersPage';
 import { RealtorsPage } from './components/RealtorsPage';
 import { ServiceProvidersPage } from './components/ServiceProvidersPage';
 import { LoginPage } from './components/LoginPage';
-import { AdminLoginPage } from './components/AdminLoginPage';
 import { AdminDashboard } from './components/AdminDashboard';
 import { RegisterPage } from './components/RegisterPage';
 import { VerifyEmailPage } from './components/VerifyEmailPage';
@@ -215,13 +214,14 @@ function AppContent() {
           <Route path="/realtors" element={<RealtorsPage navigate={navigate} currentUser={currentUser} />} />
           <Route path="/service-providers" element={<ServiceProvidersPage navigate={navigate} currentUser={currentUser} />} />
           <Route path="/login" element={<LoginPage navigate={navigate} setCurrentUser={setCurrentUser} />} />
-          <Route path="/admin/login" element={<AdminLoginPage navigate={navigate} setCurrentUser={setCurrentUser} />} />
+          {/* Single login: the old admin login URL now redirects to the unified page. */}
+          <Route path="/admin/login" element={<Navigate to="/login" replace />} />
           <Route
             path="/admin"
             element={
               currentUser?.role === 'admin'
                 ? <AdminDashboard navigate={navigate} currentUser={currentUser} setCurrentUser={setCurrentUser} />
-                : <AdminLoginPage navigate={navigate} setCurrentUser={setCurrentUser} />
+                : <Navigate to="/login" replace />
             }
           />
           <Route path="/register" element={<RegisterPage navigate={navigate} setCurrentUser={setCurrentUser} />} />

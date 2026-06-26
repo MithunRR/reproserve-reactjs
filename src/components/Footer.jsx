@@ -6,6 +6,9 @@ import reproserveLogo from 'figma:asset/d443497cecc2870d74fc45d88e6b112a10bb43ab
 
 export function Footer() {
   const location = useLocation();
+  // On dashboard pages we render a slim footer (no newsletter, no big link grid)
+  // to maximize usable screen space, per client feedback.
+  const isDashboard = /^\/(profile|admin)(\/|$)/.test(location.pathname);
   const [email, setEmail] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [submitMessage, setSubmitMessage] = React.useState('');
@@ -104,11 +107,45 @@ export function Footer() {
     return () => document.head.removeChild(style);
   }, []);
 
+  // Slim footer for dashboards: just the copyright bar + page links + social.
+  if (isDashboard) {
+    return (
+      <footer className="bg-cool-gray text-white" style={{ backgroundImage: 'none', position: 'relative' }}>
+        <div className="border-t border-slate-600" style={{ position: 'relative', overflow: 'hidden', backgroundImage: 'none' }}>
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-3">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-slate-300">
+                <span>© 2025 ReproServe. All rights reserved.</span>
+                {Array.isArray(pages) && pages.map((page) =>
+                  <Link
+                    key={page.id}
+                    to={`/page/${page.slug}`}
+                    onClick={(e) => handleLinkClick(e, `/page/${page.slug}`)}
+                    className="hover:text-sky-blue transition-colors cursor-pointer">
+                    {page.name}
+                  </Link>
+                )}
+              </div>
+              <div className="flex items-center space-x-3">
+                {[Facebook, Twitter, Instagram, Linkedin].map((Icon, index) =>
+                  <button
+                    key={index}
+                    className="text-slate-300 hover:text-white transition-colors duration-300">
+                    <Icon className="h-5 w-5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </footer>);
+  }
+
   return (
     <footer className="bg-cool-gray text-white" style={{ backgroundImage: 'none', position: 'relative' }}>
       {/* Newsletter Section */}
       <div className="border-b border-slate-600">
-        <div className="container mx-auto px-4 py-12">
+        <div className="container mx-auto px-4 py-8 md:py-12">
           <div className="max-w-4xl mx-auto text-center">
             <h3 className="text-2xl mb-4 text-white">Stay Updated with Home Improvement Tips</h3>
             <p className="mb-6 text-slate-300">
@@ -150,10 +187,10 @@ export function Footer() {
       </div>
 
       {/* Main Footer Content */}
-      <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
+      <div className="container mx-auto px-4 py-8 md:py-12">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-x-6 gap-y-8">
           {/* Company Info */}
-          <div className="lg:col-span-1">
+          <div className="col-span-2 md:col-span-1">
             <div className="flex items-center space-x-2 mb-4">
               <img
                 src={reproserveLogo}

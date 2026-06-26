@@ -2,17 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff, Mail, Lock, Loader2, X, AlertCircle } from 'lucide-react';
 import apiClient from '../utils/api';
 import { createPortal } from 'react-dom';
-import { loginStart, logout } from "../Store/Features/Authentication/authslice";
+import { loginStart } from "../Store/Features/Authentication/authslice";
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
-import { currentUserStorage } from '../utils/localStorage';
 export function LoginPage({ navigate, setCurrentUser }) {
 
   const dispatch = useDispatch();
   const { loginData, isLoggedIn, loading, error, message } = useSelector((state) => state.AuthReducer);
 
+  // Single login for everyone: the backend returns the role, and we route each
+  // role to its own dashboard. Admins log in here too (no separate admin page).
   const getDashboardPath = (role) => {
     switch (role) {
+      case 'admin':
+        return '/admin';
       case 'realtor':
         return '/realtors';
       default:
@@ -47,23 +50,6 @@ export function LoginPage({ navigate, setCurrentUser }) {
         loginData?.data?.accessToken ||
         loginData?.accessToken ||
         loginData?.token;
-
-      // Admin accounts are rejected on the public page with the SAME UX as a
-      // wrong-password failure — same toast, same popup, same copy. The admin
-      // URL must stay undiscoverable, so this path must be indistinguishable
-      // from a real auth failure.
-      if (account?.role === 'admin') {
-        if (token) localStorage.removeItem('auth_token');
-        currentUserStorage.clear?.();
-        dispatch(logout());
-        const genericMsg = 'Invalid email or password';
-        toast.error(genericMsg);
-        setErrors({ submit: genericMsg });
-        setErrorDialogData({ title: 'Login Failed', message: genericMsg });
-        setShowErrorDialog(true);
-        setHasSubmitted(false);
-        return;
-      }
 
       if (token) {
         localStorage.setItem("auth_token", token);

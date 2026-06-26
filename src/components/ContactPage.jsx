@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
 import { Phone, Mail, MapPin, Clock, Send, MessageSquare, User, Building, ChevronDown } from 'lucide-react';
+import ChatbotWidget from './ChatbotWidget';
 import {
   submitContactStart,
   resetSubmitContactFlag
@@ -627,6 +628,8 @@ export function ContactPage({ navigate }) {
           </div>
         </div>
       </div>
+
+      <ChatbotWidget />
     </div>);
 
 }

@@ -5,9 +5,11 @@ import {
   Hammer, Wrench, Zap, Droplets, Thermometer, Trees, Paintbrush,
   Shield, Key, Palette, Truck,
   Home, Building, HardHat, Grid3X3, ChevronDown,
-  CheckCircle, LocateFixed, Loader2, X } from
+  CheckCircle, LocateFixed, Loader2, X,
+  Award, Clock, List, Map as MapIcon } from
 'lucide-react';
 import apiClient from '../utils/api';
+import { ProvidersMap } from './ProvidersMap';
 import { MessagingModal } from './MessagingModal';
 import { QuoteRequestModal } from './QuoteRequestModal';
 import { useDispatch, useSelector } from 'react-redux';
@@ -171,6 +173,8 @@ export function FindProvidersPage({ navigate }) {
   });
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
   const [sortBy, setSortBy] = useState('rating');
+  // List vs. Map view toggle for the results area.
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
   const [showMessagingModal, setShowMessagingModal] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
@@ -386,8 +390,23 @@ export function FindProvidersPage({ navigate }) {
     description: u.businessDesc || 'No description provided.',
     startingPrice: u.startingPrice || 'Contact for pricing',
     availability: u.availability || 'Contact for availability',
-    distanceKm: u.distanceKm != null ? Number(u.distanceKm) : null
+    distanceKm: u.distanceKm != null ? Number(u.distanceKm) : null,
+    // Trust-indicator fields surfaced by the backend (graceful fallbacks below).
+    profilePhoto: u.profilePhoto || null,
+    badges: Array.isArray(u.badges) ? u.badges : [],
+    responseTime: u.responseTime || null,
+    yearsOfExperience: u.yearsOfExperience != null ? Number(u.yearsOfExperience) : null,
+    latitude: u.latitude != null ? Number(u.latitude) : null,
+    longitude: u.longitude != null ? Number(u.longitude) : null
   }));
+
+  // Small visual config for each trust badge (icon + accent colour).
+  const BADGE_META = {
+    'Verified': { Icon: CheckCircle, color: '#0089e1' },
+    'Top Rated': { Icon: Star, color: '#ff7a45' },
+    'Experienced': { Icon: Award, color: '#a78bfa' },
+    'Fast Responder': { Icon: Clock, color: '#34d399' }
+  };
 
 
   // A provider's broad category is derived from its service type (subcategory)
@@ -989,31 +1008,63 @@ export function FindProvidersPage({ navigate }) {
 
             {/* Provider Results */}
             <div className="lg:w-full">
-              <div className="mb-6 flex justify-between items-center flex-wrap gap-2">
+              <div className="mb-6 flex justify-between items-center flex-wrap gap-3">
                 <p className="text-white drop-shadow-md">
                   {sortedProviders.length} providers found
                   {selectedCategory && ` in ${selectedCategory}`}
                   {selectedSubcategory && ` - ${selectedSubcategory}`}
                   {coords && ` within ${radiusKm} km`}
                 </p>
-                {coords &&
-                  <p className="text-[11px] text-white/60">
-                    Geocoding ©{' '}
-                    <a
-                      href="https://www.openstreetmap.org/copyright"
-                      target="_blank" rel="noreferrer"
-                      className="underline hover:text-white">
-                      OpenStreetMap contributors
-                    </a>
-                  </p>
-                }
+
+                <div className="flex items-center gap-3 flex-wrap">
+                  {coords &&
+                    <p className="text-[11px] text-white/60">
+                      Geocoding ©{' '}
+                      <a
+                        href="https://www.openstreetmap.org/copyright"
+                        target="_blank" rel="noreferrer"
+                        className="underline hover:text-white">
+                        OpenStreetMap contributors
+                      </a>
+                    </p>
+                  }
+
+                  {/* List | Map view toggle */}
+                  <div
+                    className="flex items-center p-1 rounded-xl"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08))',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25)'
+                    }}>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('list')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${viewMode === 'list' ? 'bg-sky-blue text-white shadow' : 'text-white/80 hover:text-white'}`}>
+                      <List className="h-4 w-4" />
+                      <span>List</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('map')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${viewMode === 'map' ? 'bg-sky-blue text-white shadow' : 'text-white/80 hover:text-white'}`}>
+                      <MapIcon className="h-4 w-4" />
+                      <span>Map</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-8">
+              {viewMode === 'map' &&
+                <ProvidersMap providers={sortedProviders} navigate={navigate} />
+              }
+
+              {viewMode === 'list' &&
+              <div className="space-y-4 sm:space-y-6">
                 {sortedProviders.map((provider) =>
                 <div
                   key={provider.id}
-                  className="group relative rounded-2xl p-5 sm:p-8 cursor-pointer overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-2 z-10"
+                  className="group relative rounded-2xl p-4 sm:p-6 cursor-pointer overflow-hidden transition-all duration-500 hover:scale-[1.02] hover:-translate-y-1 z-10"
                   onClick={() => { localStorage.setItem('selectedProviderId', provider.id); navigate('provider-profile'); }}
                   style={{
                     background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
@@ -1025,40 +1076,64 @@ export function FindProvidersPage({ navigate }) {
                     {/* Animated background gradient */}
                     <div className="absolute inset-0 bg-gradient-to-br from-sky-blue/10 via-transparent to-coral-orange/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
-                    <div className="flex flex-col lg:flex-row gap-6 relative z-10">
+                    <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 relative z-10">
                       {/* Provider Info */}
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between mb-6">
-                          <div className="flex items-center space-x-4">
-                            <div className="h-16 w-16 rounded-full flex items-center justify-center text-white font-bold text-lg bg-dark-blue group-hover:scale-110 transition-transform duration-300">
-                              {provider.name.split(' ').map((n) => n[0]).join('')}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between mb-3 sm:mb-4">
+                          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                            {provider.profilePhoto ?
+                            <img
+                              src={provider.profilePhoto}
+                              alt={provider.name}
+                              className="h-14 w-14 sm:h-16 sm:w-16 rounded-full object-cover flex-shrink-0 border-2 border-white/30 group-hover:scale-110 transition-transform duration-300"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling.style.display = 'flex'; }} /> :
+                            null}
+                            <div
+                              className="h-14 w-14 sm:h-16 sm:w-16 rounded-full flex items-center justify-center text-white font-bold text-base sm:text-lg bg-dark-blue flex-shrink-0 group-hover:scale-110 transition-transform duration-300"
+                              style={{ display: provider.profilePhoto ? 'none' : 'flex' }}>
+                              {provider.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
                             </div>
-                            <div>
-                              <h3 className="text-2xl text-white group-hover:text-white transition-colors drop-shadow-md font-bold">
+                            <div className="min-w-0">
+                              <h3 className="text-lg sm:text-2xl text-white group-hover:text-white transition-colors drop-shadow-md font-bold truncate">
                                 {provider.name}
                               </h3>
-                              <p className="text-white drop-shadow-md">{provider.subcategory}</p>
-                              <div className="flex items-center space-x-4 text-sm text-white mt-2">
+                              <p className="text-sm sm:text-base text-white drop-shadow-md truncate">{provider.subcategory}</p>
+                              <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-sm text-white mt-1.5">
                                 <div className="flex items-center space-x-1">
                                   <Star className="h-4 w-4 text-coral-orange fill-coral-orange" />
                                   <span className="font-medium drop-shadow-md">{provider.rating}</span>
                                   <span className="drop-shadow-md">({provider.reviewCount} reviews)</span>
                                 </div>
-                                {provider.verified &&
-                              <div className="px-3 py-1 rounded-full text-xs flex items-center bg-white/20 backdrop-blur-sm border border-white/30 text-white group-hover:bg-sky-blue/20 group-hover:border-sky-blue/40 transition-all duration-300">
-                                    <CheckCircle className="h-3 w-3 mr-1" />
-                                    <span>Verified</span>
-                                  </div>
-                              }
                               </div>
                             </div>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        {/* Trust badges */}
+                        {(provider.badges?.length > 0 || provider.verified) &&
+                        <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-3 sm:mb-4">
+                          {(provider.badges?.length > 0 ? provider.badges : (provider.verified ? ['Verified'] : [])).map((badge, index) => {
+                            const meta = BADGE_META[badge] || { Icon: CheckCircle, color: '#0089e1' };
+                            const BadgeIcon = meta.Icon;
+                            return (
+                              <span
+                                key={index}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-medium text-white backdrop-blur-sm border"
+                                style={{
+                                  background: `${meta.color}26`,
+                                  borderColor: `${meta.color}66`
+                                }}>
+                                <BadgeIcon className="h-3 w-3" style={{ color: meta.color }} />
+                                {badge}
+                              </span>);
+                          })}
+                        </div>
+                        }
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-3 sm:mb-4">
                           <div>
-                            <div className="flex items-center text-sm text-white mb-3 flex-wrap gap-2">
-                              <MapPin className="h-4 w-4 mr-1 text-sky-blue" />
+                            <div className="flex items-center text-sm text-white mb-2 flex-wrap gap-2">
+                              <MapPin className="h-4 w-4 mr-1 text-sky-blue flex-shrink-0" />
                               <span className="drop-shadow-md">{provider.location}</span>
                               {provider.distanceKm != null &&
                                 <span className="px-2 py-0.5 rounded-full text-[11px] bg-coral-orange/20 border border-coral-orange/40 text-white">
@@ -1066,33 +1141,45 @@ export function FindProvidersPage({ navigate }) {
                                 </span>
                               }
                             </div>
-                            <div className="text-sm text-white">
-                              <div className="drop-shadow-md">{provider.yearsInBusiness} years in business</div>
+                            <div className="text-sm text-white space-y-0.5">
+                              <div className="drop-shadow-md">
+                                {provider.yearsOfExperience != null
+                                  ? `${provider.yearsOfExperience} yrs experience`
+                                  : `${provider.yearsInBusiness} years in business`}
+                              </div>
                               <div className="drop-shadow-md">{provider.completedJobs} jobs completed</div>
+                              {provider.responseTime &&
+                                <div className="flex items-center gap-1 drop-shadow-md text-white/90">
+                                  <Clock className="h-3.5 w-3.5 text-sky-blue flex-shrink-0" />
+                                  <span>Responds: {provider.responseTime}</span>
+                                </div>
+                              }
                             </div>
                           </div>
                           <div>
-                            <div className="text-sm text-white mb-3">
+                            <div className="text-sm text-white mb-2">
                               <span className="font-medium drop-shadow-md">Availability :</span> <span className="drop-shadow-md">{provider.availability}</span>
                             </div>
                             <div className="text-sm text-white">
                               <span className="font-medium drop-shadow-md">Starting at :</span>
-                              <span className="text-xl text-white ml-2 drop-shadow-md font-bold">{provider.startingPrice}</span>
+                              <span className="text-lg sm:text-xl text-white ml-2 drop-shadow-md font-bold">{provider.startingPrice}</span>
                             </div>
                           </div>
                         </div>
 
-                        <p className="text-sm text-white mb-6 leading-relaxed drop-shadow-md group-hover:text-white transition-colors duration-300">
+                        <p className="text-sm text-white mb-3 sm:mb-4 leading-relaxed drop-shadow-md line-clamp-2 sm:line-clamp-none group-hover:text-white transition-colors duration-300">
                           {provider.description}
                         </p>
 
-                        <div className="flex flex-wrap gap-2 mb-6">
+                        {provider.specialties.length > 0 &&
+                        <div className="flex flex-wrap gap-1.5 sm:gap-2">
                           {provider.specialties.map((specialty, index) =>
-                        <span key={index} className="px-3 py-1 rounded-full text-xs bg-white/20 backdrop-blur-sm border border-white/30 text-white group-hover:bg-sky-blue/20 group-hover:border-sky-blue/40 transition-all duration-300 font-medium">
+                        <span key={index} className="px-2.5 py-1 rounded-full text-[11px] sm:text-xs bg-white/20 backdrop-blur-sm border border-white/30 text-white group-hover:bg-sky-blue/20 group-hover:border-sky-blue/40 transition-all duration-300 font-medium">
                               {specialty}
                             </span>
                         )}
                         </div>
+                        }
                       </div>
 
                       {/* Actions */}
@@ -1175,6 +1262,7 @@ export function FindProvidersPage({ navigate }) {
                   </div>
                 )}
               </div>
+              }
 
               {sortedProviders.length === 0 &&
               <div

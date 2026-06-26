@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { Menu, X, User, Bell, Trash2, ChevronDown, MessageSquare } from 'lucide-react';
+import { Menu, X, User, Bell, Trash2, ChevronDown, MessageSquare, Home, Building2, Users, DoorOpen, Wrench, Phone, KeyRound, LogOut, LogIn, UserPlus } from 'lucide-react';
 import reproserveLogo from 'figma:asset/d443497cecc2870d74fc45d88e6b112a10bb43ab.png';
 import { RequestDetailsModal } from './RequestDetailsModal';
 import { MessagingModal } from './MessagingModal';
@@ -601,127 +601,143 @@ export function Header({ currentUser, setCurrentUser }) {
 
         {/* Mobile Menu */}
         {isMenuOpen &&
-        <div className="md:hidden py-4 space-y-4 bg-black/20 backdrop-blur-sm rounded-lg mx-4">
+        <div className="md:hidden pb-4">
+          <div
+            className="rounded-2xl overflow-hidden border border-white/20"
+            style={{
+              background: 'linear-gradient(135deg, rgba(0,137,225,0.97), rgba(0,69,113,0.97))',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.15)'
+            }}>
 
-            {/* Mobile Navigation */}
-            <div className="space-y-2">
+            {/* Primary navigation */}
+            <nav className="py-2">
               <Link
-              to="/"
-              onClick={() => setIsMenuOpen(false)}
-              className="block w-full text-left py-2 text-white hover:text-white/80 drop-shadow-md">
-              
-                Home
+                to="/"
+                onClick={() => setIsMenuOpen(false)}
+                className="flex items-center gap-3 px-5 py-3 text-white hover:bg-white/10 transition-colors">
+                <Home className="h-5 w-5 text-white/90" />
+                <span className="font-medium">Home</span>
               </Link>
-              <div className="space-y-1 real-estate-dropdown-container">
+
+              <div className="real-estate-dropdown-container">
                 <button
-                onClick={() => setShowRealEstateDropdown(!showRealEstateDropdown)}
-                className="flex items-center justify-between w-full text-left py-2 text-white hover:text-white/80 drop-shadow-md">
-                
-                  <span>RealEstate Service</span>
+                  onClick={() => setShowRealEstateDropdown(!showRealEstateDropdown)}
+                  className="w-full flex items-center justify-between px-5 py-3 text-white hover:bg-white/10 transition-colors">
+                  <span className="flex items-center gap-3">
+                    <Building2 className="h-5 w-5 text-white/90" />
+                    <span className="font-medium">RealEstate Service</span>
+                  </span>
                   <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showRealEstateDropdown ? 'rotate-180' : ''}`} />
                 </button>
                 {showRealEstateDropdown &&
-              <div className="pl-4 space-y-1">
-                    <Link
-                  to="/realtors"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    setShowRealEstateDropdown(false);
-                  }}
-                  className="block w-full text-left py-2 text-white/90 hover:text-white drop-shadow-md">
-                  
-                      Realtors
-                    </Link>
-                    <Link
-                  to="/open-house"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    setShowRealEstateDropdown(false);
-                  }}
-                  className="block w-full text-left py-2 text-white/90 hover:text-white drop-shadow-md">
-                  
-                      Open House
-                    </Link>
-                  </div>
-              }
+                <div className="bg-black/15">
+                  <Link
+                    to="/realtors"
+                    onClick={() => { setIsMenuOpen(false); setShowRealEstateDropdown(false); }}
+                    className="flex items-center gap-3 pl-14 pr-5 py-2.5 text-white/90 hover:bg-white/10 transition-colors">
+                    <Users className="h-4 w-4" />
+                    <span>Realtors</span>
+                  </Link>
+                  {currentUser?.role !== 'provider' &&
+                  <Link
+                    to="/open-house"
+                    onClick={() => { setIsMenuOpen(false); setShowRealEstateDropdown(false); }}
+                    className="flex items-center gap-3 pl-14 pr-5 py-2.5 text-white/90 hover:bg-white/10 transition-colors">
+                    <DoorOpen className="h-4 w-4" />
+                    <span>Open House</span>
+                  </Link>
+                  }
+                </div>
+                }
               </div>
-              <Link
-              to="/find-providers"
-              onClick={() => setIsMenuOpen(false)}
-              className="block w-full text-left py-2 text-white hover:text-white/80 drop-shadow-md">
-              
-                Contractors
-              </Link>
-              <Link
-              to="/contact"
-              onClick={() => setIsMenuOpen(false)}
-              className="block w-full text-left py-2 text-white hover:text-white/80 drop-shadow-md">
-              
-                Contact
-              </Link>
-            </div>
 
-            {/* Mobile Auth */}
-            <div className="pt-4 border-t border-border space-y-2">
+              <Link
+                to="/find-providers"
+                onClick={() => setIsMenuOpen(false)}
+                className="flex items-center gap-3 px-5 py-3 text-white hover:bg-white/10 transition-colors">
+                <Wrench className="h-5 w-5 text-white/90" />
+                <span className="font-medium">Contractors</span>
+              </Link>
+
+              <Link
+                to="/contact"
+                onClick={() => setIsMenuOpen(false)}
+                className="flex items-center gap-3 px-5 py-3 text-white hover:bg-white/10 transition-colors">
+                <Phone className="h-5 w-5 text-white/90" />
+                <span className="font-medium">Contact</span>
+              </Link>
+            </nav>
+
+            <div className="h-px bg-white/15 mx-5" />
+
+            {/* Account */}
+            <nav className="py-2">
               {currentUser ?
-            <>
-                  <button
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  setShowMessages(true);
-                  setIsClosingMessages(false);
-                  if (currentUser?.id) dispatch(fetchConversationsStart());
-                }}
-                className="block w-full text-left py-2 text-white drop-shadow-md">
+              <>
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    setShowMessages(true);
+                    setIsClosingMessages(false);
+                    if (currentUser?.id) dispatch(fetchConversationsStart());
+                  }}
+                  className="w-full flex items-center gap-3 px-5 py-3 text-white hover:bg-white/10 transition-colors">
+                  <MessageSquare className="h-5 w-5 text-white/90" />
+                  <span className="font-medium">Messages</span>
+                  {messagesUnreadTotal > 0 &&
+                  <span className="ml-auto bg-coral-orange text-white text-xs rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center">
+                    {messagesUnreadTotal > 99 ? '99+' : messagesUnreadTotal}
+                  </span>
+                  }
+                </button>
 
-                    Messages {messagesUnreadTotal > 0 ? `(${messagesUnreadTotal})` : ''}
-                  </button>
+                <Link
+                  to="/profile"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center gap-3 px-5 py-3 text-white hover:bg-white/10 transition-colors">
+                  <User className="h-5 w-5 text-white/90" />
+                  <span className="font-medium">My Profile</span>
+                </Link>
+
+                <Link
+                  to="/change-password"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center gap-3 px-5 py-3 text-white hover:bg-white/10 transition-colors">
+                  <KeyRound className="h-5 w-5 text-white/90" />
+                  <span className="font-medium">Change Password</span>
+                </Link>
+
+                <button
+                  onClick={() => { handleLogout(); setIsMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-5 py-3 text-coral-orange hover:bg-white/10 transition-colors">
+                  <LogOut className="h-5 w-5" />
+                  <span className="font-medium">Logout</span>
+                </button>
+              </> :
+              <>
+                <Link
+                  to="/login"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center gap-3 px-5 py-3 text-white hover:bg-white/10 transition-colors">
+                  <LogIn className="h-5 w-5 text-white/90" />
+                  <span className="font-medium">Login</span>
+                </Link>
+                <div className="px-4 pt-2 pb-1">
                   <Link
-                to="/profile"
-                onClick={() => setIsMenuOpen(false)}
-                className="block w-full text-left py-2 text-white drop-shadow-md">
-
-                    My Profile
-                  </Link>
-
-                  <Link
-                to="/change-password"
-                onClick={() => setIsMenuOpen(false)}
-                className="block w-full text-left py-2 text-white drop-shadow-md">
-                
-                    Change Password
-                  </Link>
-
-                  <button
-                onClick={() => {
-                  handleLogout();
-                  setIsMenuOpen(false);
-                }}
-                className="block w-full text-left py-2 text-white drop-shadow-md">
-
-                    Logout
-                  </button>
-                </> :
-
-            <>
-                  <Link
-                to="/login"
-                onClick={() => setIsMenuOpen(false)}
-                className="block w-full text-left py-2 text-white drop-shadow-md">
-
-                    Login
-                  </Link>
-                  <Link
-                to="/register"
-                onClick={() => setIsMenuOpen(false)}
-                className="block w-full text-left px-4 py-2 rounded-md bg-coral-orange text-black">
-
+                    to="/register"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-coral-orange text-black font-semibold hover:opacity-90 transition-opacity">
+                    <UserPlus className="h-5 w-5" />
                     Signup
                   </Link>
-                </>
-            }
-            </div>
+                </div>
+              </>
+              }
+            </nav>
           </div>
+        </div>
         }
       </div>
 
