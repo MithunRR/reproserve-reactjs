@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { Menu, X, User, Bell, Trash2, ChevronDown, MessageSquare, Home, Building2, Users, DoorOpen, Wrench, Phone, KeyRound, LogOut, LogIn, UserPlus } from 'lucide-react';
@@ -740,6 +741,85 @@ export function Header({ currentUser, setCurrentUser }) {
         </div>
         }
       </div>
+
+      {/* Mobile messages panel — the desktop dropdown is hidden on phones, so
+          render a tap-friendly overlay here (portaled above everything). */}
+      {showMessages && typeof document !== 'undefined' && createPortal(
+        <div
+          className="md:hidden fixed inset-0 z-[100000] flex items-start justify-center"
+          style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)' }}
+          onClick={() => setShowMessages(false)}>
+          <div
+            className="messages-dropdown-container mt-20 w-full max-w-md mx-3 rounded-2xl overflow-hidden flex flex-col"
+            style={{
+              maxHeight: '70vh',
+              background: 'linear-gradient(135deg, rgba(0,137,225,0.97), rgba(0,69,113,0.97))',
+              border: '1px solid rgba(255,255,255,0.2)',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.4)'
+            }}
+            onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-white/20 flex items-center justify-between">
+              <h3 className="font-semibold text-white">Messages</h3>
+              <button onClick={() => setShowMessages(false)} className="p-1 rounded-md hover:bg-white/10">
+                <X className="h-5 w-5 text-white" />
+              </button>
+            </div>
+            <div className="overflow-y-auto">
+              {conversations.length === 0 ?
+                <div className="p-4 text-center text-white text-sm">
+                  No conversations yet. Use the Connect button on a provider or realtor card to start one.
+                </div> :
+                <div className="divide-y divide-white/20">
+                  {conversations.map((c) => {
+                    const personal = c.partner?.firstName
+                      ? `${c.partner.firstName} ${c.partner.lastName || ''}`.trim()
+                      : '';
+                    const biz = c.partner?.businessName?.trim() || '';
+                    const display = (personal && biz && personal !== biz)
+                      ? `${personal} (${biz})`
+                      : (personal || biz || c.partner?.email || 'User');
+                    const last = c.lastMessage?.content || '';
+                    const ts = c.lastMessage?.createdAt;
+                    return (
+                      <button
+                        key={c.partner?.id}
+                        onClick={() => {
+                          setSelectedRecipient({ ...c.partner, name: display });
+                          setShowMessagingModal(true);
+                          setShowMessages(false);
+                        }}
+                        className="w-full text-left p-4 flex items-start gap-3 hover:bg-white/10 transition">
+                        <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                          {display.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm text-white font-medium truncate">{display}</p>
+                            {ts &&
+                              <span className="text-[10px] text-white/60 flex-shrink-0">
+                                {new Date(ts).toLocaleDateString()}
+                              </span>
+                            }
+                          </div>
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <p className="text-xs text-white/80 truncate">{last}</p>
+                            {Number(c.unreadCount) > 0 &&
+                              <span className="text-[10px] bg-coral-orange text-white rounded-full px-2 py-0.5 flex-shrink-0">
+                                {c.unreadCount}
+                              </span>
+                            }
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              }
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       <RequestDetailsModal
         isOpen={showRequestModal}
