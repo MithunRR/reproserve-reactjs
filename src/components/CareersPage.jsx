@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MapPin, Clock, DollarSign, Users, Heart, Award, Target, TrendingUp, Send } from 'lucide-react';
+import { MapPin, Clock, DollarSign, TrendingUp, Send } from 'lucide-react';
 
 export function CareersPage({ navigate }) {
   const [selectedJob, setSelectedJob] = useState(null);
@@ -166,27 +166,6 @@ export function CareersPage({ navigate }) {
   }];
 
 
-  const companyValues = [
-  {
-    icon: Heart,
-    title: 'Customer Obsession',
-    description: 'We put our customers first in everything we do'
-  },
-  {
-    icon: Award,
-    title: 'Excellence',
-    description: 'We strive for excellence in our work and continuous improvement'
-  },
-  {
-    icon: Users,
-    title: 'Collaboration',
-    description: 'We work together as one team to achieve our goals'
-  },
-  {
-    icon: Target,
-    title: 'Innovation',
-    description: 'We embrace new ideas and creative solutions'
-  }];
 
 
   const benefits = [
@@ -267,47 +246,6 @@ export function CareersPage({ navigate }) {
               <div className="text-3xl text-white mb-2 drop-shadow-lg">4.9★</div>
               <p className="text-white drop-shadow-md">Employee Rating</p>
             </div>
-          </div>
-        </div>
-
-        {/* Company Values */}
-        <div className="mb-16">
-          <h2 className="text-3xl text-white text-center mb-12 drop-shadow-lg">Our Values</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {companyValues.map((value, index) => {
-              const IconComponent = value.icon;
-              return (
-                <div
-                  key={index}
-                  className="group relative rounded-2xl p-8 cursor-pointer overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-2 text-center"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
-                    backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
-                  }}>
-                  
-                  {/* Animated background gradient */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-sky-blue/10 via-transparent to-coral-orange/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-
-                  {/* Content */}
-                  <div className="relative z-10">
-                    <div className="w-20 h-20 bg-sky-blue/20 backdrop-blur-sm border border-white rounded-full flex items-center justify-center mx-auto mb-6 group-hover:bg-sky-blue/30 group-hover:border-white/50 transition-all duration-300">
-                      <IconComponent className="h-10 w-10 text-white group-hover:scale-110 transition-transform duration-300" />
-                    </div>
-                    <h3 className="text-2xl text-white mb-4 group-hover:text-white transition-colors duration-300 font-bold drop-shadow-md">
-                      {value.title}
-                    </h3>
-                    <p className="text-white leading-relaxed group-hover:text-gray-200 transition-colors duration-300 drop-shadow-md">
-                      {value.description}
-                    </p>
-                  </div>
-
-                  {/* Shine effect */}
-                  <div className="absolute inset-0 -top-2 -left-2 w-0 h-0 bg-gradient-to-br from-transparent via-white/20 to-transparent group-hover:w-full group-hover:h-full transition-all duration-700 opacity-0 group-hover:opacity-100"></div>
-                </div>);
-
-            })}
           </div>
         </div>
 

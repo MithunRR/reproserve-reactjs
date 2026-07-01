@@ -39,7 +39,7 @@ export function ShowMyPropertyPage({ navigate, currentUser }) {
     if (createShowRequestSuccess) {
       toast.success('Property listing posted! Realtors will be notified.');
       dispatch(resetCreateShowRequestFlag());
-      navigate('profile');
+      navigate('/profile?tab=showings');
     }
   }, [createShowRequestSuccess, dispatch, navigate]);
 

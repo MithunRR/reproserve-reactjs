@@ -227,8 +227,10 @@ export function Footer() {
               { text: 'Find Service Providers', page: 'find-providers' },
               { text: 'Get Quotes', page: 'find-providers' },
               { text: 'Read Reviews', page: 'read-reviews' },
-              { text: 'Home Guides', page: 'blog' }
+              { text: 'Home Guides', page: 'blog' },
               // { text: 'Cost Guides', page: 'cost-guides' }
+              { text: 'Success Stories', page: 'success-stories' },
+              { text: 'Resource Center', page: 'blog' }
               ].map((link, index) =>
               <li key={index}>
                   <Link
@@ -251,8 +253,6 @@ export function Footer() {
               // { text: 'Provider Profile', page: 'provider-profile' },
               // { text: 'Get Leads', page: 'service-providers' },
               // { text: 'Marketing Tools', page: 'service-providers' },
-              { text: 'Success Stories', page: 'success-stories' },
-              { text: 'Resource Center', page: 'blog' },
               { text: 'Safety Tips', page: 'safety-tips' }].
               map((link, index) =>
               <li key={index}>

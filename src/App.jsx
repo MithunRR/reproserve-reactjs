@@ -39,7 +39,6 @@ import { OpenHouseDetailsPage } from './components/OpenHouseDetailsPage';
 import { ShowMyPropertyPage } from './components/ShowMyPropertyPage';
 import { PageContent } from './components/PageContent';
 import { ForgotPasswordPage } from './components/ForgotPasswordPage';
-import { ChangePasswordPage } from './components/ChangePasswordPage';
 
 function AppContent() {
   // Load current user from localStorage on mount
@@ -227,13 +226,14 @@ function AppContent() {
           <Route path="/register" element={<RegisterPage navigate={navigate} setCurrentUser={setCurrentUser} />} />
           <Route path="/verify-email" element={<VerifyEmailPage navigate={navigate} setCurrentUser={setCurrentUser} />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage navigate={navigate} />} />
-          <Route path="/change-password" element={<ChangePasswordPage navigate={navigate} />} />
           <Route path="/about" element={<AboutPage navigate={navigate} />} />
           <Route path="/careers" element={<CareersPage navigate={navigate} />} />
           <Route path="/press" element={<PressPage navigate={navigate} />} />
           <Route path="/blog" element={<BlogPage navigate={navigate} />} />
           <Route path="/contact" element={<ContactPage navigate={navigate} />} />
           <Route path="/profile" element={<ProfilePage navigate={navigate} currentUser={currentUser} setCurrentUser={setCurrentUser} />} />
+          <Route path="/my-profile" element={<ProfilePage navigate={navigate} currentUser={currentUser} setCurrentUser={setCurrentUser} view="profile" />} />
+          <Route path="/settings" element={<ProfilePage navigate={navigate} currentUser={currentUser} setCurrentUser={setCurrentUser} view="settings" />} />
           <Route path="/provider-profile" element={<ProviderProfilePage navigate={navigate} />} />
           <Route path="/create-project" element={<CreateProjectPage navigate={navigate} />} />
           <Route path="/read-reviews" element={<ReadReviewsPage navigate={navigate} />} />

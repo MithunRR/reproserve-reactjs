@@ -1,47 +1,28 @@
 import React from 'react';
-import { Users, Target, Award, Heart, MapPin, Mail, Linkedin } from 'lucide-react';
+import { Users, Target, Award, Heart, MapPin } from 'lucide-react';
 
 export function AboutPage({ navigate }) {
-  const teamMembers = [
-  {
-    name: 'Sarah Martinez',
-    position: 'CEO & Founder',
-    bio: 'Former real estate agent with 15+ years experience connecting users with trusted professionals.',
-    image: 'https://images.unsplash.com/photo-1652471949169-9c587e8898cd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMHdvbWFufGVufDF8fHx8MTc1OTE1MjIwMHww&ixlib=rb-4.1.0&q=80&w=1080'
-  },
-  {
-    name: 'Michael Chen',
-    position: 'CTO',
-    bio: 'Technology leader with expertise in marketplace platforms and customer matching algorithms.',
-    image: 'https://images.unsplash.com/photo-1719257751404-1dea075324bd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMG1hbnxlbnwxfHx8fDE3NTkxMjI4MDN8MA&ixlib=rb-4.1.0&q=80&w=1080'
-  },
-  {
-    name: 'Jennifer Davis',
-    position: 'VP of Operations',
-    bio: 'Operations expert ensuring quality service delivery and customer satisfaction.',
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMG1hbnxlbnwxfHx8fDE3NTkxMjI4MDN8MA&ixlib=rb-4.1.0&q=80&w=1080'
-  },
-  {
-    name: 'David Wilson',
-    position: 'Head of Business Development',
-    bio: 'Building partnerships with service providers and expanding our network nationwide.',
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMG1hbnxlbnwxfHx8fDE3NTkxMjI4MDN8MA&ixlib=rb-4.1.0&q=80&w=1080'
-  },
-  {
-    name: 'Lisa Thompson',
-    position: 'Customer Success Manager',
-    bio: 'Dedicated to ensuring both users and service providers have exceptional experiences.',
-    image: 'https://images.unsplash.com/photo-1652471949169-9c587e8898cd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMHdvbWFufGVufDF8fHx8MTc1OTE1MjIwMHww&ixlib=rb-4.1.0&q=80&w=1080'
-  },
-  {
-    name: 'Robert Johnson',
-    position: 'Quality Assurance Director',
-    bio: 'Overseeing our verification process to maintain the highest standards of service quality.',
-    image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMG1hbnxlbnwxfHx8fDE3NTkxMjI4MDN8MA&ixlib=rb-4.1.0&q=80&w=1080'
-  }];
-
-
   const values = [
+  {
+    icon: Heart,
+    title: 'Customer Obsession',
+    description: 'We put our customers first in everything we do'
+  },
+  {
+    icon: Award,
+    title: 'Excellence',
+    description: 'We strive for excellence in our work and continuous improvement'
+  },
+  {
+    icon: Users,
+    title: 'Collaboration',
+    description: 'We work together as one team to achieve our goals'
+  },
+  {
+    icon: Target,
+    title: 'Innovation',
+    description: 'We embrace new ideas and creative solutions'
+  },
   {
     icon: Heart,
     title: 'Trust & Transparency',
@@ -95,6 +76,16 @@ export function AboutPage({ navigate }) {
           <p className="text-xl text-white drop-shadow-md max-w-3xl mx-auto leading-relaxed">
             We're on a mission to connect users with trusted service professionals, 
             making home improvement projects easier, more reliable, and stress-free.
+          </p>
+        </div>
+
+        {/* Mission Statement */}
+        <div className="bg-sky-blue rounded-lg p-8 text-center text-snow-white mb-16">
+          <h2 className="text-3xl mb-6">Our Mission</h2>
+          <p className="text-xl leading-relaxed max-w-4xl mx-auto">
+            To revolutionize the home services industry by creating a trusted marketplace where users can 
+            confidently connect with verified professionals, ensuring every project is completed with excellence, 
+            transparency, and peace of mind.
           </p>
         </div>
 
@@ -184,74 +175,6 @@ export function AboutPage({ navigate }) {
               </div>
             )}
           </div>
-        </div>
-
-        {/* Team Section */}
-        <div className="mb-16">
-          <h2 className="text-3xl text-white text-center mb-12 drop-shadow-lg">Meet Our Team</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {teamMembers.map((member, index) =>
-            <div
-              key={index}
-              className="group relative rounded-2xl p-8 cursor-pointer overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-2 text-center"
-              style={{
-                background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
-              }}>
-              
-                {/* Animated background gradient */}
-                <div className="absolute inset-0 bg-gradient-to-br from-sky-blue/10 via-transparent to-coral-orange/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                
-                {/* Content */}
-                <div className="relative z-10">
-                  <div className="w-28 h-28 rounded-full mx-auto mb-6 overflow-hidden ring-4 ring-white/20 group-hover:ring-sky-blue/30 transition-all duration-300">
-                    <img
-                    src={member.image}
-                    alt={member.name}
-                    className="w-full h-full object-cover object-top group-hover:scale-110 transition-transform duration-300"
-                    style={{ aspectRatio: '1/1', objectPosition: 'center top' }} />
-                  
-                  </div>
-                  
-                  <h3 className="text-2xl text-white mb-2 group-hover:text-white transition-colors duration-300 font-bold drop-shadow-md">
-                    {member.name}
-                  </h3>
-                  
-                  <p className="text-white mb-4 font-semibold group-hover:text-white transition-colors duration-300">
-                    {member.position}
-                  </p>
-                  
-                  <p className="text-white leading-relaxed mb-6 group-hover:text-white transition-colors duration-300 drop-shadow-md">
-                    {member.bio}
-                  </p>
-                  
-                  <div className="flex justify-center space-x-4">
-                    <button className="p-3 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-sky-blue/30 hover:border-sky-blue/40 hover:scale-110 transition-all duration-300 group-hover:shadow-lg">
-                      <Mail className="h-5 w-5" />
-                    </button>
-                    <button className="p-3 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-sky-blue/30 hover:border-sky-blue/40 hover:scale-110 transition-all duration-300 group-hover:shadow-lg">
-                      <Linkedin className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Shine effect */}
-                <div className="absolute inset-0 -top-2 -left-2 w-0 h-0 bg-gradient-to-br from-transparent via-white/20 to-transparent group-hover:w-full group-hover:h-full transition-all duration-700 opacity-0 group-hover:opacity-100"></div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Mission Statement */}
-        <div className="bg-sky-blue rounded-lg p-8 text-center text-snow-white mb-16">
-          <h2 className="text-3xl mb-6">Our Mission</h2>
-          <p className="text-xl leading-relaxed max-w-4xl mx-auto">
-            To revolutionize the home services industry by creating a trusted marketplace where users can 
-            confidently connect with verified professionals, ensuring every project is completed with excellence, 
-            transparency, and peace of mind.
-          </p>
         </div>
 
         {/* Contact CTA */}
