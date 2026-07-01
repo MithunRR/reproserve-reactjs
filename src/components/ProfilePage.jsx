@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, MapPin, Edit3, Camera, Star, Calendar, MessageSquare, FileText, Home, Upload, Plus, Building, DollarSign, CheckCircle2, LocateFixed, Loader2 } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Edit3, Camera, Star, Calendar, MessageSquare, FileText, Home, Upload, Building, DollarSign, CheckCircle2, LocateFixed, Loader2, Lock, Eye, EyeOff } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { QuoteRequestModal } from './QuoteRequestModal';
 import { RequestDetailsModal } from './RequestDetailsModal';
@@ -40,10 +41,12 @@ import {
   resetClaimShowRequestFlag,
   completeShowRequestStart,
   resetCompleteShowRequestFlag,
-  fetchServiceTypesStart
+  fetchServiceTypesStart,
+  changePasswordStart,
+  resetChangePasswordFlag
 } from '../Store/Features/Authentication/authslice';
 
-export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
+export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'dashboard' }) {
   const dispatch = useDispatch();
   const {
     profileData: apiProfileData,
@@ -76,7 +79,10 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
     completeShowRequestSuccess,
     completeShowRequestError,
     completeShowRequestLoading,
-    serviceTypes
+    serviceTypes,
+    changePasswordLoading,
+    changePasswordError,
+    changePasswordSuccess
   } = useSelector((state) => state.AuthReducer);
 
   const roleLabel =
@@ -88,6 +94,16 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
   const isBusinessRole = currentUser?.role === 'provider' || currentUser?.role === 'realtor';
 
   const [activeTab, setActiveTab] = useState('overview');
+  const location = useLocation();
+
+  // Open a specific tab when navigated with ?tab=<id> (deep-link support).
+  // Re-runs if the query changes.
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(location.search).get('tab');
+    if (requestedTab) {
+      setActiveTab(requestedTab);
+    }
+  }, [location.search]);
   const [isEditing, setIsEditing] = useState(false);
   // Separate edit state for the Business Details panel so the two sections
   // can be edited and saved independently.
@@ -96,6 +112,78 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
   const [detailRequest, setDetailRequest] = useState(null);
   const [respondTarget, setRespondTarget] = useState(null);
   const [reviewTarget, setReviewTarget] = useState(null);
+
+  // ── Change password (lives inside the Settings tab) ──────────────────
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    password: '',
+    passwordConfirmation: ''
+  });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordErrors, setPasswordErrors] = useState({});
+
+  const handlePasswordChange = (field, value) => {
+    setPasswordForm((prev) => ({ ...prev, [field]: value }));
+    if (passwordErrors[field]) {
+      setPasswordErrors((prev) => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  const handleChangePasswordSubmit = (e) => {
+    e.preventDefault();
+
+    const newErrors = {};
+    if (!passwordForm.currentPassword.trim()) {
+      newErrors.currentPassword = 'Current password is required';
+    }
+    if (!passwordForm.password.trim()) {
+      newErrors.password = 'New password is required';
+    } else if (passwordForm.password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters long';
+    }
+    if (!passwordForm.passwordConfirmation.trim()) {
+      newErrors.passwordConfirmation = 'Please confirm your new password';
+    } else if (passwordForm.password !== passwordForm.passwordConfirmation) {
+      newErrors.passwordConfirmation = 'Passwords do not match';
+    }
+    setPasswordErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return;
+
+    const authToken = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    if (!authToken) {
+      toast.error('You must be logged in to change your password. Please log in again.');
+      return;
+    }
+
+    dispatch(changePasswordStart({
+      current_password: passwordForm.currentPassword,
+      password: passwordForm.password,
+      password_confirmation: passwordForm.passwordConfirmation
+    }));
+  };
+
+  // Surface change-password result as a toast and reset the form on success.
+  useEffect(() => {
+    if (changePasswordSuccess) {
+      toast.success('Password changed successfully.');
+      setPasswordForm({ currentPassword: '', password: '', passwordConfirmation: '' });
+      setPasswordErrors({});
+      dispatch(resetChangePasswordFlag());
+    }
+  }, [changePasswordSuccess, dispatch]);
+
+  useEffect(() => {
+    if (changePasswordError) {
+      toast.error(
+        typeof changePasswordError === 'string'
+          ? changePasswordError
+          : 'Failed to change password. Please try again.'
+      );
+      dispatch(resetChangePasswordFlag());
+    }
+  }, [changePasswordError, dispatch]);
 
   // Add fast fade-in animation for tab content
   useEffect(() => {
@@ -842,29 +930,10 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
 
   }
 
-  // Role-appropriate Quick Actions for the Overview tab. "Create Open House"
-  // is hidden for service providers (the app already restricts it to
-  // users/realtors). There is no standalone messages route, so "View Messages"
-  // jumps to the relevant requests/quotes tab where conversations live.
+  // Quick Actions for the Overview tab. Trimmed to just "View Messages" — there
+  // is no standalone messages route, so it jumps to the relevant requests/quotes
+  // tab where conversations live.
   const quickActions = [
-    { key: 'quote', label: 'Request a Quote', icon: Upload, onClick: () => setShowQuoteModal(true) },
-    { key: 'find', label: 'Find a Provider', icon: User, onClick: () => navigate('find-providers') },
-    ...(currentUser?.role !== 'provider'
-      ? [{
-          key: 'openhouse', label: 'Create Open House', icon: Plus, onClick: () => {
-            if (currentUser) {
-              localStorage.setItem('openCreateOpenHouseModal', 'true');
-              navigate('open-house');
-            } else {
-              localStorage.setItem('pendingRedirect', '/open-house');
-              navigate('login');
-            }
-          }
-        }]
-      : []),
-    (currentUser?.role === 'realtor'
-      ? { key: 'showings', label: 'View Showings', icon: Building, onClick: () => setActiveTab('showings') }
-      : { key: 'showings', label: 'Show My Property', icon: Building, onClick: () => navigate('show-my-property') }),
     { key: 'messages', label: 'View Messages', icon: MessageSquare, onClick: () => setActiveTab(isBusinessRole ? 'requests' : 'quotes') }
   ];
 
@@ -1108,13 +1177,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
           boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
         }}>
         
-            <p className="text-white drop-shadow-md mb-4">No quote requests yet</p>
-            <button
-          onClick={() => setShowQuoteModal(true)}
-          className="px-6 py-3 bg-coral-orange text-black rounded-xl hover:bg-coral-orange/90 transition-all duration-300 font-semibold">
-          
-              Create Your First Quote Request
-            </button>
+            <p className="text-white drop-shadow-md">No quote requests yet</p>
           </div> :
 
       <div className="space-y-4">
@@ -1390,7 +1453,10 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
   const renderShowings = () => {
     const list = Array.isArray(showRequests) ? showRequests : [];
     const isRealtor = currentUser?.role === 'realtor';
-    const available = list.filter((r) => r.status === 'pending' && !r.assignedAgentId);
+    // A realtor can also post their own property for showing; those must not
+    // appear in their own "Available to Claim" pool — only other realtors see them.
+    const available = list.filter((r) =>
+      r.status === 'pending' && !r.assignedAgentId && r.userId !== currentUser?.id);
     const mine = list.filter((r) => r.assignedAgentId === currentUser?.id);
     const customerList = list.filter((r) => r.userId === currentUser?.id);
 
@@ -1436,14 +1502,14 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
             </div>
           }
 
-          {/* Customer-side: who is the agent? */}
-          {!isRealtor && req.agent &&
+          {/* Owner-side (poster): who is the agent? */}
+          {mode === 'customer' && req.agent &&
             <div className="text-sm text-white mb-3 flex items-center gap-2">
               <User className="h-4 w-4" />
               <span>Assigned to <span className="font-semibold">{req.agent.businessName || `${req.agent.firstName || ''} ${req.agent.lastName || ''}`.trim()}</span></span>
             </div>
           }
-          {!isRealtor && req.status === 'pending' && !req.agent &&
+          {mode === 'customer' && req.status === 'pending' && !req.agent &&
             <p className="text-sm text-white/80 mb-3">No realtor has claimed this yet — they will be notified.</p>
           }
 
@@ -1451,7 +1517,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
           {isRealtor && mode === 'available' && req.user &&
             <p className="text-xs text-white/80 mb-3">Posted by {req.user.firstName} {req.user.lastName}</p>
           }
-          {isRealtor &&
+          {isRealtor && mode !== 'customer' &&
             <div className="flex gap-2 pt-3 border-t border-white/20 mt-auto">
               {mode === 'available' &&
                 <button
@@ -1534,6 +1600,19 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
                 </div>
               )}
             </div>
+
+            {/* Showings this realtor posted as an owner (they can't claim their own) */}
+            {customerList.length > 0 &&
+            <div>
+              <h4 className="text-lg text-white font-semibold mb-3 flex items-center gap-2">
+                <Building className="h-5 w-5" /> My Posted Showings
+                <span className="text-sm text-white/80">({customerList.length})</span>
+              </h4>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {customerList.map((req) => renderCard(req, 'customer'))}
+              </div>
+            </div>
+            }
           </>
         ) : (
           <>
@@ -1581,11 +1660,18 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
       <div className="container mx-auto max-w-6xl">
         {/* Header */}
         <div className="profile-page-head mb-8">
-          <h1 className="text-3xl text-white drop-shadow-lg mb-2">My Profile</h1>
-          <p className="text-white drop-shadow-md">Manage your account and track your projects</p>
+          <h1 className="text-3xl text-white drop-shadow-lg mb-2">{view === 'settings' ? 'Settings' : view === 'profile' ? 'My Profile' : 'Dashboard'}</h1>
+          <p className="text-white drop-shadow-md">
+            {view === 'settings'
+              ? 'Manage your service location, password and notification preferences'
+              : view === 'profile'
+              ? 'View and edit your personal and business details'
+              : 'Manage your account and track your projects'}
+          </p>
         </div>
 
-        {/* Navigation Tabs */}
+        {/* Navigation Tabs — dashboard view only */}
+        {view === 'dashboard' &&
         <div
           className="profile-tabs-card rounded-2xl shadow-lg mb-8 relative overflow-hidden"
           style={{
@@ -1604,11 +1690,13 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
             ...(isBusinessRole ?
             [{ id: 'requests', label: currentUser?.role === 'realtor' ? 'Meeting Requests' : 'Client Requests', icon: Calendar }] :
             []),
-            // Customer: "My Showings". Realtor: "Showing Jobs" (browse + claim).
+            // Realtor: "Opportunity" (browse + claim). Regular user: "My Showings".
+            // Service providers don't do property showings, so no tab for them.
             ...(currentUser?.role === 'realtor'
               ? [{ id: 'showings', label: 'Opportunity', icon: Building }]
-              : [{ id: 'showings', label: 'My Showings', icon: Building }]),
-            { id: 'settings', label: 'Settings', icon: Edit3 }].
+              : currentUser?.role === 'provider'
+              ? []
+              : [{ id: 'showings', label: 'My Showings', icon: Building }])].
             map((tab) => {
               const IconComponent = tab.icon;
               return (
@@ -1630,15 +1718,21 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
             })}
           </div>
         </div>
+        }
 
-        {/* Tab Content */}
+        {/* Tab Content — dashboard view only */}
+        {view === 'dashboard' && <>
         {activeTab === 'overview' && renderOverview()}
         {activeTab === 'projects' && renderProjects()}
         {activeTab === 'favorites' && renderFavorites()}
         {activeTab === 'quotes' && renderQuotes()}
         {activeTab === 'requests' && renderIncomingRequests()}
         {activeTab === 'showings' && renderShowings()}
-        {activeTab === 'settings' &&
+        </>
+        }
+
+        {/* My Profile page: profile information + business details (its own page) */}
+        {view === 'profile' &&
         <div className="space-y-8 animate-fadeIn">
             {/* Profile Information */}
             <div
@@ -2074,7 +2168,12 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
                 }
               </div>
             }
+        </div>
+        }
 
+        {/* Settings page: service location + change password + notifications */}
+        {view === 'settings' &&
+        <div className="space-y-8 animate-fadeIn">
             {/* Service Location — provider/realtor only. Powers the "providers
                 within N km" search on the public Find Providers page. */}
             {isBusinessRole &&
@@ -2138,43 +2237,143 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
               </div>
             }
 
-            {/* Request Quote Section */}
+            {/* Change Password + Notification Settings — side by side on large screens */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8 items-start">
+            {/* Change Password */}
             <div
-            className="rounded-2xl shadow-lg p-8 relative overflow-hidden mt-8"
+            className="rounded-2xl shadow-lg p-8 relative overflow-hidden"
             style={{
               background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
               backdropFilter: 'blur(20px)',
               border: '1px solid rgba(255,255,255,0.2)',
               boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
             }}>
-            
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-xl text-white drop-shadow-lg mb-2">Request Quote</h3>
-                  <p className="text-white drop-shadow-md text-sm">
-                    Upload pictures and details to get quotes from service providers
-                  </p>
-                </div>
-                <button
-                onClick={() => setShowQuoteModal(true)}
-                className="px-6 py-3 bg-coral-orange text-black rounded-xl hover:bg-coral-orange/90 hover:scale-105 transition-all duration-300 flex items-center space-x-2 font-semibold shadow-lg">
-                
-                  <Upload className="h-5 w-5" />
-                  <span>Request Quote</span>
-                </button>
+
+              <div className="flex items-center gap-3 mb-2">
+                <Lock className="h-5 w-5 text-white" />
+                <h3 className="text-xl text-white drop-shadow-lg">Change Password</h3>
               </div>
+              <p className="text-white/80 text-sm drop-shadow-md mb-6">
+                Enter your current password and choose a new one.
+              </p>
+
+              <form onSubmit={handleChangePasswordSubmit} className="space-y-6 max-w-md">
+                {/* Current Password */}
+                <div>
+                  <label htmlFor="settings-current-password" className="block text-sm font-medium text-white mb-2 drop-shadow-md">
+                    Current Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white pointer-events-none" />
+                    <input
+                    type={showCurrentPassword ? 'text' : 'password'}
+                    id="settings-current-password"
+                    value={passwordForm.currentPassword}
+                    onChange={(e) => handlePasswordChange('currentPassword', e.target.value)}
+                    placeholder="Enter your current password"
+                    className={`w-full pl-12 pr-12 py-3 rounded-md border-2 ${
+                    passwordErrors.currentPassword ?
+                    'border-coral-orange focus:border-coral-orange' :
+                    'border-white/30 focus:border-white/60'} bg-white/10 backdrop-blur-sm text-white placeholder:text-white/50 focus:outline-none transition-colors`} />
+
+                    <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 transition-colors">
+
+                      {showCurrentPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                  {passwordErrors.currentPassword &&
+                  <p className="mt-2 text-sm text-coral-orange drop-shadow-md">{passwordErrors.currentPassword}</p>
+                  }
+                </div>
+
+                {/* New Password */}
+                <div>
+                  <label htmlFor="settings-new-password" className="block text-sm font-medium text-white mb-2 drop-shadow-md">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white pointer-events-none" />
+                    <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    id="settings-new-password"
+                    value={passwordForm.password}
+                    onChange={(e) => handlePasswordChange('password', e.target.value)}
+                    placeholder="Enter your new password"
+                    className={`w-full pl-12 pr-12 py-3 rounded-md border-2 ${
+                    passwordErrors.password ?
+                    'border-coral-orange focus:border-coral-orange' :
+                    'border-white/30 focus:border-white/60'} bg-white/10 backdrop-blur-sm text-white placeholder:text-white/50 focus:outline-none transition-colors`} />
+
+                    <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 transition-colors">
+
+                      {showNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                  {passwordErrors.password &&
+                  <p className="mt-2 text-sm text-coral-orange drop-shadow-md">{passwordErrors.password}</p>
+                  }
+                </div>
+
+                {/* Confirm New Password */}
+                <div>
+                  <label htmlFor="settings-confirm-password" className="block text-sm font-medium text-white mb-2 drop-shadow-md">
+                    Confirm New Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white pointer-events-none" />
+                    <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    id="settings-confirm-password"
+                    value={passwordForm.passwordConfirmation}
+                    onChange={(e) => handlePasswordChange('passwordConfirmation', e.target.value)}
+                    placeholder="Confirm your new password"
+                    className={`w-full pl-12 pr-12 py-3 rounded-md border-2 ${
+                    passwordErrors.passwordConfirmation ?
+                    'border-coral-orange focus:border-coral-orange' :
+                    'border-white/30 focus:border-white/60'} bg-white/10 backdrop-blur-sm text-white placeholder:text-white/50 focus:outline-none transition-colors`} />
+
+                    <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 transition-colors">
+
+                      {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                  {passwordErrors.passwordConfirmation &&
+                  <p className="mt-2 text-sm text-coral-orange drop-shadow-md">{passwordErrors.passwordConfirmation}</p>
+                  }
+                </div>
+
+                <div className="flex justify-start pt-2">
+                  <button
+                    type="submit"
+                    disabled={changePasswordLoading}
+                    className="px-6 py-3 bg-coral-orange text-black rounded-xl hover:bg-coral-orange/90 hover:scale-105 transition-all duration-300 flex items-center gap-2 font-semibold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100">
+
+                    {changePasswordLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                    {changePasswordLoading ? 'Changing Password...' : 'Change Password'}
+                  </button>
+                </div>
+              </form>
             </div>
 
             {/* Notification Settings */}
             <div
-            className="rounded-2xl shadow-lg p-8 relative overflow-hidden mt-8"
+            className="rounded-2xl shadow-lg p-8 relative overflow-hidden"
             style={{
               background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
               backdropFilter: 'blur(20px)',
               border: '1px solid rgba(255,255,255,0.2)',
               boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
             }}>
-            
+
               <h3 className="text-xl text-white drop-shadow-lg mb-6">Notification Settings</h3>
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-4 rounded-xl hover:bg-white/5 transition-colors duration-300">
@@ -2185,7 +2384,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
                     checked={notificationSettings.email || false}
                     onChange={(e) => setNotificationSettings((prev) => ({ ...prev, email: e.target.checked }))}
                     className="w-5 h-5 rounded border-2 border-white/30 bg-white/10 text-sky-blue focus:ring-2 focus:ring-sky-blue focus:ring-offset-2 focus:ring-offset-transparent cursor-pointer transition-all duration-300" />
-                  
+
                     <div className="flex-1">
                       <label htmlFor="email-notifications" className="text-white drop-shadow-md font-medium cursor-pointer block">
                         Email Notifications
@@ -2202,7 +2401,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
                     checked={notificationSettings.push || false}
                     onChange={(e) => setNotificationSettings((prev) => ({ ...prev, push: e.target.checked }))}
                     className="w-5 h-5 rounded border-2 border-white/30 bg-white/10 text-sky-blue focus:ring-2 focus:ring-sky-blue focus:ring-offset-2 focus:ring-offset-transparent cursor-pointer transition-all duration-300" />
-                  
+
                     <div className="flex-1">
                       <label htmlFor="push-notifications" className="text-white drop-shadow-md font-medium cursor-pointer block">
                         Push Notifications
@@ -2219,7 +2418,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
                     checked={notificationSettings.openHouse || false}
                     onChange={(e) => setNotificationSettings((prev) => ({ ...prev, openHouse: e.target.checked }))}
                     className="w-5 h-5 rounded border-2 border-white/30 bg-white/10 text-sky-blue focus:ring-2 focus:ring-sky-blue focus:ring-offset-2 focus:ring-offset-transparent cursor-pointer transition-all duration-300" />
-                  
+
                     <div className="flex-1">
                       <label htmlFor="openhouse-notifications" className="text-white drop-shadow-md font-medium cursor-pointer block">
                         Open House Notifications
@@ -2236,7 +2435,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
                     checked={notificationSettings.bidSubmission || false}
                     onChange={(e) => setNotificationSettings((prev) => ({ ...prev, bidSubmission: e.target.checked }))}
                     className="w-5 h-5 rounded border-2 border-white/30 bg-white/10 text-sky-blue focus:ring-2 focus:ring-sky-blue focus:ring-offset-2 focus:ring-offset-transparent cursor-pointer transition-all duration-300" />
-                  
+
                     <div className="flex-1">
                       <label htmlFor="bid-notifications" className="text-white drop-shadow-md font-medium cursor-pointer block">
                         Bid Submission Notifications
@@ -2246,6 +2445,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser }) {
                   </div>
                 </div>
               </div>
+            </div>
             </div>
           </div>
         }

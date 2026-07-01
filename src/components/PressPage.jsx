@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Download, ExternalLink, Mail, Phone, Facebook, Twitter, Instagram, Linkedin, Award } from 'lucide-react';
+import { Calendar, Download, ExternalLink, Mail, Phone, Award } from 'lucide-react';
 
 export function PressPage({ navigate }) {
   const pressReleases = [
@@ -80,38 +80,7 @@ export function PressPage({ navigate }) {
   }];
 
 
-  const mediaKit = [
-  {
-    title: 'Company Logos',
-    description: 'High-resolution ReproServe logos in various formats',
-    fileSize: '2.3 MB',
-    downloadUrl: '/media-kit/reproserve-logos.zip'
-  },
-  {
-    title: 'Executive Photos',
-    description: 'Professional headshots of leadership team',
-    fileSize: '4.1 MB',
-    downloadUrl: '/media-kit/executive-photos.zip'
-  },
-  {
-    title: 'Company Fact Sheet',
-    description: 'Key statistics and company information',
-    fileSize: '156 KB',
-    downloadUrl: '/media-kit/fact-sheet.pdf'
-  },
-  {
-    title: 'Product Screenshots',
-    description: 'High-quality platform and app screenshots',
-    fileSize: '8.7 MB',
-    downloadUrl: '/media-kit/product-screenshots.zip'
-  }];
 
-
-  const socialStats = [
-  { platform: 'Twitter', followers: '15.2K', handle: '@ReproServe', icon: Twitter },
-  { platform: 'LinkedIn', followers: '8.9K', handle: 'ReproServe', icon: Linkedin },
-  { platform: 'Facebook', followers: '12.5K', handle: 'ReproServeOfficial', icon: Facebook },
-  { platform: 'Instagram', followers: '6.1K', handle: '@reproserve', icon: Instagram }];
 
 
   const companyStats = [
@@ -248,55 +217,6 @@ export function PressPage({ navigate }) {
                 )}
               </div>
             </div>
-
-            {/* Media Kit */}
-            <div>
-              <h2 className="text-3xl text-white mb-8 drop-shadow-lg">Media Kit</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {mediaKit.map((item, index) =>
-                <div
-                  key={index}
-                  className="group relative rounded-2xl p-8 cursor-pointer overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-2"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
-                    backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
-                  }}>
-                  
-                    {/* Animated background gradient */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-sky-blue/10 via-transparent to-coral-orange/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    
-                    {/* Content */}
-                    <div className="relative z-10">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl text-white mb-2 group-hover:text-white transition-colors duration-300 font-bold drop-shadow-md">
-                            {item.title}
-                          </h3>
-                          <p className="text-white group-hover:text-white transition-colors duration-300 drop-shadow-md">
-                            {item.description}
-                          </p>
-                          <p className="text-sm text-white mt-2 group-hover:text-white/90 transition-colors duration-300 drop-shadow-md">
-                            {item.fileSize}
-                          </p>
-                        </div>
-                        <div className="w-12 h-12 bg-sky-blue/20 backdrop-blur-sm border border-sky-blue/30 rounded-full flex items-center justify-center group-hover:bg-sky-blue/30 group-hover:border-sky-blue/50 group-hover:scale-110 transition-all duration-300">
-                          <Download className="h-6 w-6 text-white group-hover:scale-110 transition-transform duration-300" />
-                        </div>
-                      </div>
-                      <button className="w-full py-3 bg-sky-blue/20 backdrop-blur-sm border border-sky-blue/30 text-white rounded-xl hover:bg-sky-blue/30 hover:border-sky-blue/50 hover:scale-105 transition-all duration-300 flex items-center justify-center space-x-2 font-semibold group-hover:shadow-lg">
-                        <Download className="h-4 w-4" />
-                        <span>Download</span>
-                      </button>
-                    </div>
-
-                    {/* Shine effect */}
-                    <div className="absolute inset-0 -top-2 -left-2 w-0 h-0 bg-gradient-to-br from-transparent via-white/20 to-transparent group-hover:w-full group-hover:h-full transition-all duration-700 opacity-0 group-hover:opacity-100"></div>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
 
           {/* Sidebar */}
@@ -356,44 +276,6 @@ export function PressPage({ navigate }) {
                       </div>
                     </div>
                   )}
-                </div>
-              </div>
-
-              {/* Social Media */}
-              <div
-                className="rounded-2xl p-8 relative overflow-hidden"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
-                  backdropFilter: 'blur(20px)',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
-                }}>
-                
-                <h3 className="text-xl text-white mb-6 drop-shadow-lg font-bold">Follow Us</h3>
-                <div className="space-y-4">
-                  {socialStats.map((social, index) => {
-                    const IconComponent = social.icon;
-                    return (
-                      <div key={index} className="flex items-center justify-between group hover:bg-white/10 p-3 rounded-xl transition-all duration-300">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-10 h-10 bg-sky-blue/20 backdrop-blur-sm border border-sky-blue/30 rounded-full flex items-center justify-center group-hover:bg-sky-blue/30 group-hover:border-sky-blue/50 group-hover:scale-110 transition-all duration-300">
-                            <IconComponent className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-semibold text-white group-hover:text-white transition-colors duration-300 drop-shadow-md">
-                              {social.platform}
-                            </p>
-                            <p className="text-xs text-white group-hover:text-white/90 transition-colors duration-300 drop-shadow-md">
-                              {social.handle}
-                            </p>
-                          </div>
-                        </div>
-                        <span className="text-sm text-white font-bold group-hover:text-white transition-colors duration-300 drop-shadow-md">
-                          {social.followers}
-                        </span>
-                      </div>);
-
-                  })}
                 </div>
               </div>
 

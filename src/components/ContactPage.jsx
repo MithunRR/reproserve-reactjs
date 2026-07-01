@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
-import { Phone, Mail, MapPin, Clock, Send, MessageSquare, User, Building, ChevronDown } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, Send, MessageSquare, User, Building, ChevronDown, Twitter, Linkedin, Facebook, Instagram } from 'lucide-react';
 import ChatbotWidget from './ChatbotWidget';
 import {
   submitContactStart,
@@ -216,12 +216,6 @@ export function ContactPage({ navigate }) {
     title: 'Address',
     details: ['123 Innovation Drive', 'Tech Park, Phoenix, AZ 85001'],
     description: 'Visit our headquarters'
-  },
-  {
-    icon: Clock,
-    title: 'Business Hours',
-    details: ['Monday - Friday: 8:00 AM - 8:00 PM', 'Saturday: 9:00 AM - 5:00 PM', 'Sunday: Closed'],
-    description: 'Customer support hours'
   }];
 
 
@@ -240,12 +234,14 @@ export function ContactPage({ navigate }) {
     title: 'Technical Support',
     description: 'Website, app, or platform technical issues',
     icon: MessageSquare
-  },
-  {
-    title: 'Billing & Payments',
-    description: 'Questions about charges, refunds, or payment methods',
-    icon: Phone
   }];
+
+
+  const socialStats = [
+  { platform: 'Twitter', handle: '@ReproServe', followers: '15.2K', icon: Twitter },
+  { platform: 'LinkedIn', handle: 'ReproServe', followers: '8.9K', icon: Linkedin },
+  { platform: 'Facebook', handle: 'ReproServeOfficial', followers: '12.5K', icon: Facebook },
+  { platform: 'Instagram', handle: '@reproserve', followers: '6.1K', icon: Instagram }];
 
 
   if (isSubmitted) {
@@ -392,7 +388,7 @@ export function ContactPage({ navigate }) {
           {/* Contact Form */}
           <div className="lg:col-span-2">
             <div
-              className="contact-form-card rounded-2xl shadow-xl p-10 relative overflow-hidden"
+              className="contact-form-card rounded-2xl shadow-xl p-10 h-full relative overflow-hidden"
               style={{
                 background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
                 backdropFilter: 'blur(20px)',
@@ -578,10 +574,14 @@ export function ContactPage({ navigate }) {
                 </div>
               </form>
             </div>
+          </div>
+        </div>
 
+        {/* Emergency + Follow Us */}
+        <div className="mt-16 grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Emergency Contact */}
             <div
-              className="mt-10 rounded-2xl p-8 relative overflow-hidden"
+              className="rounded-2xl p-8 relative overflow-hidden"
               style={{
                 background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
                 backdropFilter: 'blur(20px)',
@@ -603,7 +603,44 @@ export function ContactPage({ navigate }) {
                 Available Monday-Friday 8:00 AM - 8:00 PM PST
               </p>
             </div>
-          </div>
+
+            {/* Follow Us */}
+            <div
+              className="rounded-2xl p-8 relative overflow-hidden"
+              style={{
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
+                backdropFilter: 'blur(20px)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
+              }}>
+
+              <h3 className="text-2xl text-white mb-6 drop-shadow-lg">Follow Us</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {socialStats.map((social, index) => {
+                  const IconComponent = social.icon;
+                  return (
+                    <div
+                      key={index}
+                      className="rounded-xl p-4 flex items-center justify-between group hover:bg-white/10 transition-all duration-300"
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
+                        border: '1px solid rgba(255,255,255,0.2)'
+                      }}>
+                      <div className="flex items-center space-x-4">
+                        <div className="w-12 h-12 bg-sky-blue/20 backdrop-blur-sm border border-sky-blue/30 rounded-full flex items-center justify-center group-hover:bg-sky-blue/30 transition-all duration-300">
+                          <IconComponent className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-lg font-semibold text-white drop-shadow-md">{social.platform}</p>
+                          <p className="text-sm text-white/90 drop-shadow-md">{social.handle}</p>
+                        </div>
+                      </div>
+                      <span className="text-lg text-white font-bold drop-shadow-md">{social.followers}</span>
+                    </div>);
+
+                })}
+              </div>
+            </div>
         </div>
 
         {/* Map Placeholder */}

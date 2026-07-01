@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { Menu, X, User, Bell, Trash2, ChevronDown, MessageSquare, Home, Building2, Users, DoorOpen, Wrench, Phone, KeyRound, LogOut, LogIn, UserPlus } from 'lucide-react';
+import { Menu, X, User, Bell, Trash2, ChevronDown, MessageSquare, Home, Building2, Users, DoorOpen, Wrench, Phone, Settings, LayoutDashboard, LogOut, LogIn, UserPlus } from 'lucide-react';
 import reproserveLogo from 'figma:asset/d443497cecc2870d74fc45d88e6b112a10bb43ab.png';
 import { RequestDetailsModal } from './RequestDetailsModal';
 import { MessagingModal } from './MessagingModal';
@@ -543,16 +543,24 @@ export function Header({ currentUser, setCurrentUser }) {
                       to="/profile"
                       onClick={() => setShowProfileDropdown(false)}
                       className="block w-full text-left px-4 py-2 text-white hover:bg-white/10 transition-colors duration-300 drop-shadow-md rounded-t-2xl">
-                      
+
+                          Dashboard
+                        </Link>
+
+                        <Link
+                      to="/my-profile"
+                      onClick={() => setShowProfileDropdown(false)}
+                      className="block w-full text-left px-4 py-2 text-white hover:bg-white/10 transition-colors duration-300 drop-shadow-md">
+
                           My Profile
                         </Link>
 
                         <Link
-                      to="/change-password"
+                      to="/settings"
                       onClick={() => setShowProfileDropdown(false)}
                       className="block w-full text-left px-4 py-2 text-white hover:bg-white/10 transition-colors duration-300 drop-shadow-md">
-                      
-                          Change Password
+
+                          Settings
                         </Link>
 
                         <button
@@ -698,16 +706,24 @@ export function Header({ currentUser, setCurrentUser }) {
                   to="/profile"
                   onClick={() => setIsMenuOpen(false)}
                   className="flex items-center gap-3 px-5 py-3 text-white hover:bg-white/10 transition-colors">
+                  <LayoutDashboard className="h-5 w-5 text-white/90" />
+                  <span className="font-medium">Dashboard</span>
+                </Link>
+
+                <Link
+                  to="/my-profile"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center gap-3 px-5 py-3 text-white hover:bg-white/10 transition-colors">
                   <User className="h-5 w-5 text-white/90" />
                   <span className="font-medium">My Profile</span>
                 </Link>
 
                 <Link
-                  to="/change-password"
+                  to="/settings"
                   onClick={() => setIsMenuOpen(false)}
                   className="flex items-center gap-3 px-5 py-3 text-white hover:bg-white/10 transition-colors">
-                  <KeyRound className="h-5 w-5 text-white/90" />
-                  <span className="font-medium">Change Password</span>
+                  <Settings className="h-5 w-5 text-white/90" />
+                  <span className="font-medium">Settings</span>
                 </Link>
 
                 <button
