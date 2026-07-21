@@ -3,7 +3,7 @@ import { ArrowLeft, Upload, X, Camera, Video, FileText, Square } from 'lucide-re
 import { useDispatch, useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
 import { currentUserStorage } from '../utils/localStorage';
-import { createProjectStart, resetCreateProjectFlag } from '../Store/Features/Authentication/authslice';
+import { createProjectStart, resetCreateProjectFlag, fetchServiceTypesStart } from '../Store/Features/Authentication/authslice';
 
 export function CreateProjectPage({ navigate }) {
   // "Add to Portfolio" from a completed job pre-fills these fields.
@@ -30,9 +30,19 @@ export function CreateProjectPage({ navigate }) {
 
   const dispatch = useDispatch();
   const currentUser = currentUserStorage.get();
+  const isRealtor = currentUser?.role === 'realtor';
   const createProjectLoading = useSelector((state) => state.AuthReducer.createProjectLoading);
   const createProjectSuccess = useSelector((state) => state.AuthReducer.createProjectSuccess);
   const createProjectError = useSelector((state) => state.AuthReducer.createProjectError);
+  const serviceTypes = useSelector((state) => state.AuthReducer.serviceTypes);
+
+  // Realtors pick from realtor categories, not the service-provider taxonomy.
+  // Fetch the catalog once so the role-based list is available.
+  useEffect(() => {
+    if (isRealtor && (!serviceTypes || serviceTypes.length === 0)) {
+      dispatch(fetchServiceTypesStart());
+    }
+  }, [isRealtor, serviceTypes, dispatch]);
 
   useEffect(() => {
     if (createProjectSuccess) {
@@ -63,12 +73,22 @@ export function CreateProjectPage({ navigate }) {
     return () => document.head.removeChild(style);
   }, []);
 
-  const categories = [
+  // Service-provider / customer taxonomy (broad groups).
+  const providerCategories = [
   'Construction & Renovation',
   'Repairs & Maintenance',
   'Outdoor & Landscaping',
   'Home Services & Lifestyle',
   'Professional & Legal Services'];
+
+  // Realtors see realtor service-type names (from the catalog, category==='realtor').
+  const realtorCategories = (serviceTypes || [])
+    .filter((t) => t?.category === 'realtor')
+    .map((t) => t.name);
+
+  const categories = isRealtor && realtorCategories.length > 0
+    ? realtorCategories
+    : providerCategories;
 
 
   const handlePhotoUpload = (event) => {

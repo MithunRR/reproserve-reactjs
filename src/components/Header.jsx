@@ -218,6 +218,23 @@ export function Header({ currentUser, setCurrentUser }) {
     return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
   };
 
+  // Single-letter badge for the profile avatar, based on account type:
+  //   S = service provider, R = realtor, A = admin, U = normal user.
+  // (The frontend normalizes 'service_provider' to 'provider' at login.)
+  const roleInitial = (role) => {
+    switch (role) {
+      case 'provider':
+      case 'service_provider':
+        return 'S';
+      case 'realtor':
+        return 'R';
+      case 'admin':
+        return 'A';
+      default:
+        return 'U';
+    }
+  };
+
   return (
     <header
       className="fixed top-0 left-0 right-0 z-50 w-full border-b border-white/20 transition-all duration-300"
@@ -519,7 +536,11 @@ export function Header({ currentUser, setCurrentUser }) {
                   onClick={() => setShowProfileDropdown(!showProfileDropdown)}
                   className="flex items-center space-x-2 p-2 rounded-md hover:bg-dark-blue hover:text-white">
 
-                    <User className="h-5 w-5 text-white" />
+                    <span
+                      className="flex items-center justify-center h-7 w-7 rounded-full bg-white/20 border border-white/40 text-white text-sm font-bold"
+                      title={roleInitial(currentUser.role) === 'S' ? 'Service Provider' : roleInitial(currentUser.role) === 'R' ? 'Realtor' : roleInitial(currentUser.role) === 'A' ? 'Admin' : 'User'}>
+                      {roleInitial(currentUser.role)}
+                    </span>
                     <span className="text-white">{capitalizeName(currentUser.name)}</span>
                   </button>
                   {showProfileDropdown &&

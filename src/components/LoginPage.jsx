@@ -16,8 +16,7 @@ export function LoginPage({ navigate, setCurrentUser }) {
     switch (role) {
       case 'admin':
         return '/admin';
-      case 'realtor':
-        return '/realtors';
+      // Realtors and service providers both land on their dashboard (/profile).
       default:
         return '/profile';
     }

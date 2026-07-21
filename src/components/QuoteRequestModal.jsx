@@ -45,10 +45,20 @@ export function QuoteRequestModal({
   // Memoised so the prefill effect below keeps a stable dependency. Previously
   // this was a fresh array every render, which re-ran the effect on every
   // keystroke and reset the form — making the inputs impossible to type into.
-  const dbCategories = useMemo(
-    () => (Array.isArray(serviceTypes) ? serviceTypes.map((t) => t?.name).filter(Boolean) : []),
-    [serviceTypes]
-  );
+  const dbCategories = useMemo(() => {
+    if (!Array.isArray(serviceTypes)) return [];
+    // Show categories that match the logged-in user's audience. Normal users
+    // (no business role) see the full catalog. Rows without a category fall
+    // through so nothing silently disappears.
+    const role = currentUser?.role;
+    const cat = role === 'realtor'
+      ? 'realtor'
+      : (role === 'provider' || role === 'service_provider')
+      ? 'service_provider'
+      : null;
+    const list = cat ? serviceTypes.filter((t) => !t?.category || t.category === cat) : serviceTypes;
+    return list.map((t) => t?.name).filter(Boolean);
+  }, [serviceTypes, currentUser]);
   const resolvedCategories = useMemo(
     () => (Array.isArray(categoryOptions) && categoryOptions.length > 0 ? categoryOptions : dbCategories),
     [categoryOptions, dbCategories]

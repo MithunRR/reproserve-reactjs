@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, MapPin, Edit3, Camera, Star, Calendar, MessageSquare, FileText, Home, Upload, Building, DollarSign, CheckCircle2, LocateFixed, Loader2, Lock, Eye, EyeOff } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Edit3, Camera, Star, Calendar, MessageSquare, FileText, Home, Upload, Building, DollarSign, CheckCircle2, LocateFixed, Loader2, Lock, Eye, EyeOff, Clock, Plus, X, ChevronDown, CalendarOff } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -45,6 +45,55 @@ import {
   changePasswordStart,
   resetChangePasswordFlag
 } from '../Store/Features/Authentication/authslice';
+
+// Weekday scaffold for the Standard Working Hours editor.
+const WORKING_DAYS = [
+  { key: 'mon', label: 'Monday' },
+  { key: 'tue', label: 'Tuesday' },
+  { key: 'wed', label: 'Wednesday' },
+  { key: 'thu', label: 'Thursday' },
+  { key: 'fri', label: 'Friday' },
+  { key: 'sat', label: 'Saturday' },
+  { key: 'sun', label: 'Sunday' }
+];
+
+// A sensible starting schedule: 9–5 on weekdays, Sunday closed.
+const defaultWorkingHours = () =>
+  WORKING_DAYS.reduce((acc, d) => {
+    acc[d.key] = { closed: d.key === 'sun', open: '09:00', close: '17:00' };
+    return acc;
+  }, {});
+
+// Coerces whatever is stored (JSON string / object / null) into a full,
+// well-formed working-hours object so the editor always has every day.
+const normaliseWorkingHours = (raw) => {
+  let obj = raw;
+  if (typeof raw === 'string') {
+    try { obj = JSON.parse(raw); } catch (_) { obj = null; }
+  }
+  const base = defaultWorkingHours();
+  if (obj && typeof obj === 'object') {
+    for (const d of WORKING_DAYS) {
+      if (obj[d.key]) base[d.key] = { ...base[d.key], ...obj[d.key] };
+    }
+  }
+  return base;
+};
+
+// Maps the app's role value ('provider' | 'realtor' | …) to a
+// service_types.category so each role sees its own categories.
+const roleToServiceCategory = (role) =>
+  role === 'realtor' ? 'realtor' : 'service_provider';
+
+// Converts a stored ISO datetime to the value a datetime-local input expects
+// (YYYY-MM-DDTHH:mm in local time), or '' when unset.
+const toLocalInput = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'dashboard' }) {
   const dispatch = useDispatch();
@@ -92,8 +141,26 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
         ? 'Realtor'
         : 'User';
   const isBusinessRole = currentUser?.role === 'provider' || currentUser?.role === 'realtor';
+  const isRealtor = currentUser?.role === 'realtor';
+
+  // Service types filtered to the logged-in user's audience. Rows without a
+  // category (older data) fall through so nothing silently disappears.
+  const roleServiceTypes = (serviceTypes || []).filter(
+    (t) => !t?.category || t.category === roleToServiceCategory(currentUser?.role)
+  );
 
   const [activeTab, setActiveTab] = useState('overview');
+  // Sub-tab within the Quotes tab. "My Quote Requests" is the default/main one.
+  const [quotesSubTab, setQuotesSubTab] = useState('requests');
+  // "Add Listing" dropdown (realtor) + the project details modal.
+  const [showAddListing, setShowAddListing] = useState(false);
+  const [detailProject, setDetailProject] = useState(null);
+  // Standard working hours + block-calendar (business roles).
+  const [showWorkingHoursModal, setShowWorkingHoursModal] = useState(false);
+  const [workingHours, setWorkingHours] = useState(() => defaultWorkingHours());
+  const [blockFrom, setBlockFrom] = useState('');
+  const [blockUntil, setBlockUntil] = useState('');
+  const [availabilitySaving, setAvailabilitySaving] = useState(false);
   const location = useLocation();
 
   // Open a specific tab when navigated with ?tab=<id> (deep-link support).
@@ -328,6 +395,10 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
       longitude: apiProfileData.longitude != null ? Number(apiProfileData.longitude) : null
     }));
     if (apiProfileData.profilePhoto) setProfilePhotoUrl(apiProfileData.profilePhoto);
+    // Availability: working hours + block-calendar window.
+    setWorkingHours(normaliseWorkingHours(apiProfileData.workingHours));
+    setBlockFrom(toLocalInput(apiProfileData.blockedFrom));
+    setBlockUntil(toLocalInput(apiProfileData.blockedUntil));
   }, [apiProfileData]);
 
   // Load the service-types catalog once — populates the Business Details dropdown
@@ -451,6 +522,42 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
     }));
     setIsEditingBusiness(false);
   };
+
+  // Persist the weekly working hours. Sent as an object; the backend stores it
+  // as JSON. Reuses the shared updateProfileSuccess/Error toasts.
+  const handleSaveWorkingHours = () => {
+    if (!currentUser?.id) return;
+    dispatch(updateProfileStart({
+      id: currentUser.id,
+      payload: { workingHours }
+    }));
+    setShowWorkingHoursModal(false);
+  };
+
+  // Persist the block-calendar window. Empty inputs clear the block. A local
+  // datetime-local value is converted to an ISO string for the API.
+  const handleSaveBlockCalendar = () => {
+    if (!currentUser?.id) return;
+    if (blockFrom && blockUntil && new Date(blockFrom) >= new Date(blockUntil)) {
+      toast.error('Block "from" must be before "to".');
+      return;
+    }
+    setAvailabilitySaving(true);
+    dispatch(updateProfileStart({
+      id: currentUser.id,
+      payload: {
+        blockedFrom: blockFrom ? new Date(blockFrom).toISOString() : null,
+        blockedUntil: blockUntil ? new Date(blockUntil).toISOString() : null
+      }
+    }));
+  };
+
+  // Clears availability-saving flag once the update round-trips.
+  useEffect(() => {
+    if (availabilitySaving && (updateProfileSuccess || updateProfileError)) {
+      setAvailabilitySaving(false);
+    }
+  }, [updateProfileSuccess, updateProfileError, availabilitySaving]);
 
   // Immediate, standalone upload of the business profile photo. POSTs the file
   // as multipart/form-data ("photo") to /api/profile/photo. The request
@@ -872,6 +979,40 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
     bids: q.responses || []
   }));
 
+  // Dashboard tab order is role-specific:
+  //   Realtor:  Overview · Opportunity · My Listing · Meeting Requests · Quotes · Favorites
+  //   Provider: Overview · Client Requests · My Projects · Quotes · Favorites
+  //   User:     Overview · My Projects · Favorites · Quotes · My Showings
+  const TAB = {
+    overview: { id: 'overview', label: 'Overview', icon: User },
+    favorites: { id: 'favorites', label: 'Favorites', icon: Star },
+    quotes: { id: 'quotes', label: 'Quotes', icon: FileText }
+  };
+  const dashboardTabs = isRealtor
+    ? [
+        TAB.overview,
+        { id: 'showings', label: 'Opportunity', icon: Building },
+        { id: 'projects', label: 'My Listing', icon: Home },
+        { id: 'requests', label: 'Meeting Requests', icon: Calendar },
+        TAB.quotes,
+        TAB.favorites
+      ]
+    : currentUser?.role === 'provider'
+    ? [
+        TAB.overview,
+        { id: 'requests', label: 'Client Requests', icon: Calendar },
+        { id: 'projects', label: 'My Projects', icon: Home },
+        TAB.quotes,
+        TAB.favorites
+      ]
+    : [
+        TAB.overview,
+        { id: 'projects', label: 'My Projects', icon: Home },
+        TAB.favorites,
+        TAB.quotes,
+        { id: 'showings', label: 'My Showings', icon: Building }
+      ];
+
   // "Saved Quotes" = the user's quote requests that already have provider responses.
   const savedQuotes = (apiQuotes || [])
     .filter((q) => Array.isArray(q.responses) && q.responses.length > 0)
@@ -952,7 +1093,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
         }}>
         
           <div className="text-2xl font-bold text-white mb-2 drop-shadow-lg">{recentProjects.length}</div>
-          <div className="text-white drop-shadow-md">Total Projects</div>
+          <div className="text-white drop-shadow-md">{isRealtor ? 'Total Listing' : 'Total Projects'}</div>
         </div>
         <div
         onClick={() => setActiveTab('favorites')}
@@ -1015,26 +1156,61 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
   const renderProjects = () =>
   <div className="space-y-6 animate-fadeIn">
       <div className="profile-head-row flex items-center justify-between">
-        <h3 className="text-xl text-white drop-shadow-lg">My Projects</h3>
-        <button
-        onClick={() => navigate('create-project')}
-        className="px-4 py-2 bg-sky-blue text-white rounded-xl hover:bg-sky-blue/90 hover:scale-105 transition-all duration-300 font-semibold shadow-lg">
-        
-          Start New Project
-        </button>
+        <h3 className="text-xl text-white drop-shadow-lg">{isRealtor ? 'My Listing' : 'My Projects'}</h3>
+        {isRealtor ?
+          <div className="relative">
+            <button
+              onClick={() => setShowAddListing((v) => !v)}
+              className="px-4 py-2 bg-sky-blue text-white rounded-xl hover:bg-sky-blue/90 hover:scale-105 transition-all duration-300 font-semibold shadow-lg flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              <span>Add Listing</span>
+              <ChevronDown className={`h-4 w-4 transition-transform ${showAddListing ? 'rotate-180' : ''}`} />
+            </button>
+            {showAddListing &&
+              <div
+                className="absolute right-0 mt-2 w-56 rounded-xl shadow-lg z-30 overflow-hidden"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(0,137,225,0.97), rgba(0,69,113,0.97))',
+                  backdropFilter: 'blur(20px)',
+                  border: '1px solid rgba(255,255,255,0.3)'
+                }}>
+                {[
+                  { label: 'New Project', route: 'create-project' },
+                  { label: 'Open House', route: 'open-house' },
+                  { label: 'Show My Property', route: 'show-my-property' }
+                ].map((item, i) =>
+                  <button
+                    key={item.route}
+                    onClick={() => { setShowAddListing(false); navigate(item.route); }}
+                    className={`block w-full text-left px-4 py-3 text-white hover:bg-white/15 transition-colors ${i > 0 ? 'border-t border-white/15' : ''}`}>
+                    {item.label}
+                  </button>
+                )}
+              </div>
+            }
+          </div> :
+          <button
+            onClick={() => navigate('create-project')}
+            className="px-4 py-2 bg-sky-blue text-white rounded-xl hover:bg-sky-blue/90 hover:scale-105 transition-all duration-300 font-semibold shadow-lg">
+            Start New Project
+          </button>
+        }
       </div>
 
       {recentProjects.map((project) =>
     <div
       key={project.id}
-      className="group relative rounded-2xl p-6 overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-2"
+      onClick={() => setDetailProject(project)}
+      role="button"
+      tabIndex={0}
+      className="group relative rounded-2xl p-6 overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-2 cursor-pointer"
       style={{
         background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
         backdropFilter: 'blur(20px)',
         border: '1px solid rgba(255,255,255,0.2)',
         boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
       }}>
-      
+
           {/* Animated background gradient */}
           <div className="absolute inset-0 bg-gradient-to-br from-sky-blue/10 via-transparent to-coral-orange/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
@@ -1068,15 +1244,21 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
               </div>
             </div>
             <div className="flex space-x-3">
-              <button className="px-3 py-1 bg-sky-blue text-white rounded-xl text-sm hover:bg-sky-blue/90 hover:scale-105 transition-all duration-300 font-medium">
+              <button
+                onClick={(e) => { e.stopPropagation(); setDetailProject(project); }}
+                className="px-3 py-1 bg-sky-blue text-white rounded-xl text-sm hover:bg-sky-blue/90 hover:scale-105 transition-all duration-300 font-medium">
                 View Details
               </button>
               {project.status === 'Completed' && !project.rating &&
-          <button className="px-3 py-1 bg-coral-orange text-white rounded-xl text-sm hover:bg-coral-orange/90 hover:scale-105 transition-all duration-300 font-medium">
+          <button
+            onClick={(e) => e.stopPropagation()}
+            className="px-3 py-1 bg-coral-orange text-white rounded-xl text-sm hover:bg-coral-orange/90 hover:scale-105 transition-all duration-300 font-medium">
                   Leave Review
                 </button>
           }
-              <button className="px-3 py-1 border border-white/30 text-white rounded-xl text-sm hover:bg-white/20 hover:border-white/50 transition-all duration-300 font-medium">
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="px-3 py-1 border border-white/30 text-white rounded-xl text-sm hover:bg-white/20 hover:border-white/50 transition-all duration-300 font-medium">
                 <MessageSquare className="h-3 w-3 inline mr-1" />
                 Message
               </button>
@@ -1140,45 +1322,69 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
     </div>;
 
 
-  const renderQuotes = () =>
-  <div className="space-y-8 animate-fadeIn">
-      {/* Provider-side: quoted / completed client requests */}
-      {isBusinessRole && sentIncomingRequests.length > 0 &&
-        <div>
-          <h3 className="text-xl text-white drop-shadow-lg mb-1">Sent Quotes & Completed Jobs</h3>
-          <p className="text-white/80 drop-shadow-md text-sm mb-6">
+  const renderQuotes = () => {
+    // Sub-tabs under the Quotes tab. "My Quote Requests" is the main/default.
+    const quotesSubTabs = [
+      { id: 'requests', label: 'My Quote Requests' },
+      ...(isBusinessRole ? [{ id: 'sent', label: 'Sent Quotes & Completed Jobs' }] : []),
+      { id: 'saved', label: 'Saved Quotes' }
+    ];
+    const activeSub = quotesSubTabs.some((t) => t.id === quotesSubTab) ? quotesSubTab : 'requests';
+    const glass = {
+      background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
+      backdropFilter: 'blur(20px)',
+      border: '1px solid rgba(255,255,255,0.2)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
+    };
+    const emptyState = (text) =>
+      <div className="rounded-2xl p-8 text-center relative overflow-hidden" style={glass}>
+        <p className="text-white drop-shadow-md">{text}</p>
+      </div>;
+
+    return (
+  <div className="space-y-6 animate-fadeIn">
+      {/* Request for Quote — pinned to the top of the Quotes tab for every dashboard */}
+      <div className="profile-head-row flex items-center justify-between">
+        <h3 className="text-xl text-white drop-shadow-lg">Quotes</h3>
+        <button
+        onClick={() => setShowQuoteModal(true)}
+        className="px-4 py-2 bg-sky-blue text-white rounded-xl hover:bg-sky-blue/90 hover:scale-105 transition-all duration-300 flex items-center space-x-2 font-semibold shadow-lg">
+          <Upload className="h-4 w-4" />
+          <span>Request New Quote</span>
+        </button>
+      </div>
+
+      {/* Sub-tab navigation */}
+      <div className="flex gap-2 flex-wrap">
+        {quotesSubTabs.map((t) =>
+          <button
+            key={t.id}
+            onClick={() => setQuotesSubTab(t.id)}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${activeSub === t.id ?
+              'bg-coral-orange text-black shadow-lg' :
+              'bg-white/10 text-white hover:bg-white/20 border border-white/20'}`}>
+            {t.label}
+          </button>
+        )}
+      </div>
+
+      {/* Sent Quotes & Completed Jobs (business roles) */}
+      {activeSub === 'sent' && isBusinessRole &&
+        <div className="space-y-4">
+          <p className="text-white/80 drop-shadow-md text-sm">
             Client requests you've already quoted or completed.
           </p>
-          <div className="space-y-4">
-            {sentIncomingRequests.map((req) => renderIncomingRequestCard(req))}
-          </div>
+          {sentIncomingRequests.length > 0
+            ? sentIncomingRequests.map((req) => renderIncomingRequestCard(req))
+            : emptyState('No sent quotes or completed jobs yet')}
         </div>
       }
 
-      {/* Quote Requests */}
+      {/* My Quote Requests (main) */}
+      {activeSub === 'requests' &&
       <div>
-        <div className="profile-head-row flex items-center justify-between mb-6">
-          <h3 className="text-xl text-white drop-shadow-lg">My Quote Requests</h3>
-          <button
-          onClick={() => setShowQuoteModal(true)}
-          className="px-4 py-2 bg-sky-blue text-white rounded-xl hover:bg-sky-blue/90 hover:scale-105 transition-all duration-300 flex items-center space-x-2 font-semibold">
-          
-            <Upload className="h-4 w-4" />
-            <span>Request New Quote</span>
-          </button>
-        </div>
         {quoteRequests.length === 0 ?
-      <div
-        className="rounded-2xl p-8 text-center relative overflow-hidden"
-        style={{
-          background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255,255,255,0.2)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
-        }}>
-        
-            <p className="text-white drop-shadow-md">No quote requests yet</p>
-          </div> :
+      emptyState('No quote requests yet') :
 
       <div className="space-y-4">
             {quoteRequests.map((request) =>
@@ -1229,12 +1435,12 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
           </div>
       }
       </div>
+      }
 
       {/* Saved Quotes from Providers */}
-      <div>
-        <h3 className="text-xl text-white drop-shadow-lg mb-6">Saved Quotes</h3>
-        <div className="space-y-4">
-          {savedQuotes.map((quote) =>
+      {activeSub === 'saved' &&
+      <div className="space-y-4">
+          {savedQuotes.length > 0 ? savedQuotes.map((quote) =>
         <div
           key={quote.id}
           className="group relative rounded-2xl p-6 overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-2"
@@ -1286,10 +1492,12 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
               {/* Shine effect */}
               <div className="absolute inset-0 -top-2 -left-2 w-0 h-0 bg-gradient-to-br from-transparent via-white/20 to-transparent group-hover:w-full group-hover:h-full transition-all duration-700 opacity-0 group-hover:opacity-100"></div>
             </div>
-        )}
-        </div>
+        ) : emptyState('No saved quotes yet')}
       </div>
-    </div>;
+      }
+    </div>
+    );
+  };
 
 
   // Incoming requests directed at this provider/realtor (/quotes?providerId=).
@@ -1682,21 +1890,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
           }}>
           
           <div className="profile-tabs flex border-b border-white/30">
-            {[
-            { id: 'overview', label: 'Overview', icon: User },
-            { id: 'projects', label: 'My Projects', icon: Home },
-            { id: 'favorites', label: 'Favorites', icon: Star },
-            { id: 'quotes', label: 'Quotes', icon: FileText },
-            ...(isBusinessRole ?
-            [{ id: 'requests', label: currentUser?.role === 'realtor' ? 'Meeting Requests' : 'Client Requests', icon: Calendar }] :
-            []),
-            // Realtor: "Opportunity" (browse + claim). Regular user: "My Showings".
-            // Service providers don't do property showings, so no tab for them.
-            ...(currentUser?.role === 'realtor'
-              ? [{ id: 'showings', label: 'Opportunity', icon: Building }]
-              : currentUser?.role === 'provider'
-              ? []
-              : [{ id: 'showings', label: 'My Showings', icon: Building }])].
+            {dashboardTabs.
             map((tab) => {
               const IconComponent = tab.icon;
               return (
@@ -2004,6 +2198,83 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
                   </div>
                 </div>
 
+                {/* Availability — Standard Working Hours + Block Calendar. Saved
+                    independently of the Edit Business form. */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 pb-6 border-b border-white/15">
+                  {/* Standard Working Hours */}
+                  <div className="rounded-xl p-4 bg-white/5 border border-white/15">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock className="h-4 w-4 text-white/80" />
+                      <span className="text-white font-medium text-sm">Standard Working Hours</span>
+                    </div>
+                    <p className="text-xs text-white/70 mb-3">
+                      {WORKING_DAYS.filter((d) => !workingHours[d.key]?.closed).length} day(s) open per week.
+                    </p>
+                    <div className="space-y-1 mb-3">
+                      {WORKING_DAYS.map((d) =>
+                        <div key={d.key} className="flex justify-between text-xs text-white/80">
+                          <span>{d.label}</span>
+                          <span>
+                            {workingHours[d.key]?.closed
+                              ? <span className="text-white/50">Closed</span>
+                              : `${workingHours[d.key]?.open || '—'} – ${workingHours[d.key]?.close || '—'}`}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setShowWorkingHoursModal(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-sky-blue text-white rounded-xl hover:bg-sky-blue/90 transition-all duration-300 font-semibold text-sm">
+                      <Clock className="h-4 w-4" />
+                      Set Working Hours
+                    </button>
+                  </div>
+
+                  {/* Block Calendar */}
+                  <div className="rounded-xl p-4 bg-white/5 border border-white/15">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CalendarOff className="h-4 w-4 text-white/80" />
+                      <span className="text-white font-medium text-sm">Block Calendar</span>
+                    </div>
+                    <p className="text-xs text-white/70 mb-3">
+                      Hide your profile from search during this window. You reappear automatically once it ends.
+                    </p>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-white/80 text-xs mb-1">From</label>
+                        <input
+                          type="datetime-local"
+                          value={blockFrom}
+                          onChange={(e) => setBlockFrom(e.target.value)}
+                          className="w-full px-3 py-2 border-2 border-white/30 bg-white/10 text-white rounded focus:outline-none focus:border-white/60 text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-white/80 text-xs mb-1">To</label>
+                        <input
+                          type="datetime-local"
+                          value={blockUntil}
+                          onChange={(e) => setBlockUntil(e.target.value)}
+                          className="w-full px-3 py-2 border-2 border-white/30 bg-white/10 text-white rounded focus:outline-none focus:border-white/60 text-sm" />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleSaveBlockCalendar}
+                          disabled={availabilitySaving}
+                          className="px-4 py-2 bg-coral-orange text-black rounded-xl hover:bg-coral-orange/90 transition-all duration-300 font-semibold text-sm disabled:opacity-60">
+                          {availabilitySaving ? 'Saving…' : 'Save Block'}
+                        </button>
+                        {(blockFrom || blockUntil) &&
+                          <button
+                            onClick={() => { setBlockFrom(''); setBlockUntil(''); }}
+                            className="px-4 py-2 border-2 border-white/30 text-white rounded-xl hover:bg-white/20 transition-all duration-300 text-sm">
+                            Clear
+                          </button>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Business Name */}
                   <div>
@@ -2037,7 +2308,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
                         onChange={handleInputChange}
                         className="w-full px-3 py-2 border-2 border-white/30 bg-white/10 backdrop-blur-sm text-white rounded focus:outline-none focus:border-white/60">
                         <option value="" className="text-slate-900">— Select —</option>
-                        {(serviceTypes || []).map((t) =>
+                        {roleServiceTypes.map((t) =>
                           <option key={t.id} value={t.id} className="text-slate-900">{t.name}</option>
                         )}
                       </select> :
@@ -2456,7 +2727,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
         isOpen={showQuoteModal}
         onClose={() => setShowQuoteModal(false)}
         onSubmit={handleQuoteSubmit}
-        categoryOptions={(serviceTypes || []).map((t) => t.name).filter(Boolean)}
+        categoryOptions={roleServiceTypes.map((t) => t.name).filter(Boolean)}
         currentUser={currentUser} />
 
       {/* Request details modal — opened from the Meeting / Client Requests cards */}
@@ -2480,6 +2751,116 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
         loading={createReviewLoading}
         onSubmit={handleSubmitReview}
         onClose={() => setReviewTarget(null)} />
+
+      {/* Set Working Hours modal (business roles) */}
+      {showWorkingHoursModal &&
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setShowWorkingHoursModal(false)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto"
+            style={{ background: 'linear-gradient(135deg, rgba(0,69,113,0.98), rgba(0,22,36,0.98))', border: '1px solid rgba(255,255,255,0.25)' }}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl text-white font-semibold flex items-center gap-2">
+                <Clock className="h-5 w-5" /> Standard Working Hours
+              </h3>
+              <button onClick={() => setShowWorkingHoursModal(false)} className="p-1 rounded hover:bg-white/10">
+                <X className="h-5 w-5 text-white" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {WORKING_DAYS.map((d) => {
+                const day = workingHours[d.key] || { closed: false, open: '09:00', close: '17:00' };
+                return (
+                  <div key={d.key} className="flex items-center gap-3 flex-wrap">
+                    <span className="w-24 text-white text-sm">{d.label}</span>
+                    <label className="flex items-center gap-1 text-xs text-white/80 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!day.closed}
+                        onChange={(e) => setWorkingHours((prev) => ({ ...prev, [d.key]: { ...prev[d.key], closed: e.target.checked } }))} />
+                      Closed
+                    </label>
+                    <input
+                      type="time"
+                      value={day.open || '09:00'}
+                      disabled={day.closed}
+                      onChange={(e) => setWorkingHours((prev) => ({ ...prev, [d.key]: { ...prev[d.key], open: e.target.value } }))}
+                      className="px-2 py-1 border border-white/30 bg-white/10 text-white rounded text-sm disabled:opacity-40" />
+                    <span className="text-white/60">–</span>
+                    <input
+                      type="time"
+                      value={day.close || '17:00'}
+                      disabled={day.closed}
+                      onChange={(e) => setWorkingHours((prev) => ({ ...prev, [d.key]: { ...prev[d.key], close: e.target.value } }))}
+                      className="px-2 py-1 border border-white/30 bg-white/10 text-white rounded text-sm disabled:opacity-40" />
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowWorkingHoursModal(false)}
+                className="px-4 py-2 border-2 border-white/30 text-white rounded-xl hover:bg-white/20 transition-all">
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveWorkingHours}
+                disabled={updateProfileLoading}
+                className="px-4 py-2 bg-sky-blue text-white rounded-xl hover:bg-sky-blue/90 transition-all font-semibold disabled:opacity-60">
+                {updateProfileLoading ? 'Saving…' : 'Save Working Hours'}
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      {/* Project / listing details modal (opened by clicking a project card) */}
+      {detailProject &&
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setDetailProject(null)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-2xl shadow-2xl p-6"
+            style={{ background: 'linear-gradient(135deg, rgba(0,69,113,0.98), rgba(0,22,36,0.98))', border: '1px solid rgba(255,255,255,0.25)' }}>
+            <div className="flex items-start justify-between mb-4">
+              <h3 className="text-xl text-white font-semibold">{detailProject.title}</h3>
+              <button onClick={() => setDetailProject(null)} className="p-1 rounded hover:bg-white/10">
+                <X className="h-5 w-5 text-white" />
+              </button>
+            </div>
+            <div className="space-y-3 text-white/90 text-sm">
+              <div className="flex justify-between">
+                <span className="text-white/60">Category</span>
+                <span>{detailProject.provider || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">Status</span>
+                <span>{detailProject.status}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">Created</span>
+                <span>{detailProject.date ? new Date(detailProject.date).toLocaleDateString() : '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">Budget</span>
+                <span>{detailProject.cost}</span>
+              </div>
+            </div>
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setDetailProject(null)}
+                className="px-4 py-2 bg-sky-blue text-white rounded-xl hover:bg-sky-blue/90 transition-all font-semibold">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      }
 
     </div>);
 
