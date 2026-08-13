@@ -367,10 +367,9 @@ export function Header({ currentUser, setCurrentUser }) {
                       className="absolute right-0 mt-2 rounded-2xl shadow-lg z-50 max-h-96 overflow-y-auto scrollbar-hide"
                       style={{
                         width: '420px',
-                        background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
-                        backdropFilter: 'blur(20px)',
-                        border: '1px solid rgba(255,255,255,0.2)',
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)',
+                        background: 'linear-gradient(135deg, rgba(0,137,225,1) 0%, rgba(0,69,113,1) 100%)',
+                        border: '1px solid rgba(255,255,255,0.25)',
+                        boxShadow: '0 12px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.15)',
                         animation: isClosingMessages
                           ? 'dropdownPopOut 0.2s ease-out forwards'
                           : 'dropdownPopIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
@@ -448,8 +447,11 @@ export function Header({ currentUser, setCurrentUser }) {
                     } else {
                       setShowNotifications(true);
                       setIsClosingNotifications(false);
-                      if (currentUser?.id) {
-                        dispatch(fetchNotificationsStart({ userId: currentUser.id }));
+                      // Opening the panel marks everything read — clears the
+                      // badge + unread dots. (No re-fetch here: it would race
+                      // the mark-all and momentarily restore the unread state.)
+                      if (currentUser?.id && unreadCount > 0) {
+                        dispatch(markAllNotificationsReadStart(currentUser.id));
                       }
                     }
                   }}
@@ -467,10 +469,9 @@ export function Header({ currentUser, setCurrentUser }) {
                   className="absolute right-0 mt-2 rounded-2xl shadow-lg z-50 max-h-96 overflow-y-auto scrollbar-hide"
                   style={{
                     width: '450px',
-                    background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
-                    backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)',
+                    background: 'linear-gradient(135deg, rgba(0,137,225,1) 0%, rgba(0,69,113,1) 100%)',
+                    border: '1px solid rgba(255,255,255,0.25)',
+                    boxShadow: '0 12px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.15)',
                     animation: isClosingNotifications ?
                     'dropdownPopOut 0.2s ease-out forwards' :
                     'dropdownPopIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'

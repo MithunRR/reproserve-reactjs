@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, MapPin, Edit3, Camera, Star, Calendar, MessageSquare, FileText, Home, Upload, Building, DollarSign, CheckCircle2, LocateFixed, Loader2, Lock, Eye, EyeOff, Clock, Plus, X, ChevronDown, CalendarOff } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, Mail, Phone, MapPin, Edit3, Camera, Star, Calendar, MessageSquare, FileText, Home, Upload, Building, DollarSign, CheckCircle2, LocateFixed, Loader2, Lock, Eye, EyeOff, Clock, Plus, X, ChevronDown, CalendarOff, Bookmark, Send, Search } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -22,8 +22,15 @@ import {
   updateProfileStart,
   resetUpdateProfileFlag,
   fetchProjectsStart,
+  updateProjectStart,
+  resetUpdateProjectFlag,
+  removeProjectStart,
+  resetRemoveProjectFlag,
   fetchFavoritesStart,
   removeFavoriteStart,
+  fetchSavedQuotesStart,
+  addSavedQuoteStart,
+  removeSavedQuoteStart,
   fetchQuotesStart,
   fetchIncomingQuotesStart,
   createQuoteStart,
@@ -43,8 +50,14 @@ import {
   resetCompleteShowRequestFlag,
   fetchServiceTypesStart,
   changePasswordStart,
-  resetChangePasswordFlag
+  resetChangePasswordFlag,
+  fetchConversationsStart,
+  fetchMessagesStart,
+  sendMessageStart,
+  setActiveThreadPeer,
+  markThreadReadLocal
 } from '../Store/Features/Authentication/authslice';
+import { emitMessage, emitMessageRead } from '../services/socket';
 
 // Weekday scaffold for the Standard Working Hours editor.
 const WORKING_DAYS = [
@@ -104,7 +117,17 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
     updateProfileSuccess,
     updateProfileError,
     projects: apiProjects,
+    updateProjectSuccess,
+    updateProjectError,
+    updateProjectLoading,
+    removeProjectSuccess,
+    removeProjectError,
+    removeProjectLoading,
     favorites: apiFavorites,
+    savedQuotes: apiSavedQuotes,
+    conversations,
+    messages: threadMessages,
+    messagesLoading,
     quotes: apiQuotes,
     incomingQuotes,
     incomingQuotesLoading,
@@ -149,12 +172,46 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
     (t) => !t?.category || t.category === roleToServiceCategory(currentUser?.role)
   );
 
-  const [activeTab, setActiveTab] = useState('overview');
+  // Active tab + Quotes sub-tab are persisted for the browsing session so that
+  // leaving the dashboard (e.g. "Add to Portfolio" → Create Project) and coming
+  // back — via Cancel, the browser Back button, or a successful save — returns
+  // to the exact tab/sub-tab you were on instead of resetting to Overview.
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === 'undefined') return 'overview';
+    return sessionStorage.getItem('dash_activeTab') || 'overview';
+  });
   // Sub-tab within the Quotes tab. "My Quote Requests" is the default/main one.
-  const [quotesSubTab, setQuotesSubTab] = useState('requests');
+  const [quotesSubTab, setQuotesSubTab] = useState(() => {
+    if (typeof window === 'undefined') return 'requests';
+    return sessionStorage.getItem('dash_quotesSubTab') || 'requests';
+  });
+
+  // Keep the session-scoped copies in sync so a return trip restores them.
+  useEffect(() => {
+    if (typeof window !== 'undefined') sessionStorage.setItem('dash_activeTab', activeTab);
+  }, [activeTab]);
+  useEffect(() => {
+    if (typeof window !== 'undefined') sessionStorage.setItem('dash_quotesSubTab', quotesSubTab);
+  }, [quotesSubTab]);
   // "Add Listing" dropdown (realtor) + the project details modal.
   const [showAddListing, setShowAddListing] = useState(false);
   const [detailProject, setDetailProject] = useState(null);
+  // Portfolio detail modal: view vs. inline-edit mode + the editable draft.
+  const [projectEditMode, setProjectEditMode] = useState(false);
+  const [projectForm, setProjectForm] = useState(null);
+  // Requested-tour (show-my-property) details modal.
+  const [detailShowing, setDetailShowing] = useState(null);
+  // Pending "remove from portfolio" confirmation ({ project, request }).
+  const [removePortfolioTarget, setRemovePortfolioTarget] = useState(null);
+  // Inbox: selected conversation peer, message draft, per-thread quote picker.
+  const [inboxPeer, setInboxPeer] = useState(null);
+  const [inboxDraft, setInboxDraft] = useState('');
+  const [inboxSending, setInboxSending] = useState(false);
+  const [inboxQuoteId, setInboxQuoteId] = useState(null);
+  const [inboxSearch, setInboxSearch] = useState('');
+  // Collapsible quote panel inside a thread — hidden until the "Quotes" toggle.
+  const [inboxQuotePanelOpen, setInboxQuotePanelOpen] = useState(false);
+  const inboxScrollRef = useRef(null);
   // Standard working hours + block-calendar (business roles).
   const [showWorkingHoursModal, setShowWorkingHoursModal] = useState(false);
   const [workingHours, setWorkingHours] = useState(() => defaultWorkingHours());
@@ -352,6 +409,8 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
     if (currentUser?.id) {
       dispatch(fetchProjectsStart({ userId: currentUser.id }));
       dispatch(fetchFavoritesStart({ userId: currentUser.id }));
+      dispatch(fetchSavedQuotesStart({ userId: currentUser.id }));
+      dispatch(fetchConversationsStart());
       dispatch(fetchQuotesStart({ userId: currentUser.id }));
       // Realtors / providers also load the requests directed at them.
       if (isBusinessRole) {
@@ -740,13 +799,166 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
     }));
   };
 
+  // Deterministic title a completed job gets when added to the portfolio.
+  const portfolioTitleFor = (request) =>
+    `${request.category || 'Project'}${request.location ? ` — ${request.location}` : ''}`;
+
+  // The portfolio Project created from this completed job, if one exists.
+  // Matched by the explicit sourceQuoteId link (reliable — a plain title match
+  // collides when two jobs share the same category + location).
+  const portfolioProjectFor = (request) =>
+    (apiProjects || []).find((p) => Number(p.sourceQuoteId) === Number(request.id)) || null;
+
   const handleAddToPortfolio = (request) => {
     localStorage.setItem('portfolioPrefill', JSON.stringify({
-      title: `${request.category || 'Project'}${request.location ? ` — ${request.location}` : ''}`,
+      title: portfolioTitleFor(request),
       category: request.category || '',
-      description: request.description || ''
+      description: request.description || '',
+      // Portfolio pieces are finished work — pre-mark completed so they don't
+      // show a misleading "Quoted"/"Active" badge on the card.
+      status: 'completed',
+      // Link back to the completed job so Add ⇄ Remove stays reliable.
+      sourceQuoteId: request.id
     }));
     navigate('create-project');
+  };
+
+  const handleConfirmRemovePortfolio = () => {
+    const id = removePortfolioTarget?.project?.id;
+    if (id) dispatch(removeProjectStart(id));
+  };
+
+  // Close the confirm modal (and the portfolio detail modal, if open) + toast
+  // once the delete round-trips.
+  useEffect(() => {
+    if (removeProjectSuccess) {
+      toast.success('Removed from portfolio');
+      setRemovePortfolioTarget(null);
+      setDetailProject(null);
+      setProjectEditMode(false);
+      setProjectForm(null);
+      dispatch(resetRemoveProjectFlag());
+    }
+  }, [removeProjectSuccess, dispatch]);
+
+  useEffect(() => {
+    if (removeProjectError) {
+      toast.error(typeof removeProjectError === 'string' ? removeProjectError : 'Failed to remove from portfolio');
+      dispatch(resetRemoveProjectFlag());
+    }
+  }, [removeProjectError, dispatch]);
+
+  // ── Portfolio detail / edit (provider & realtor) ──────────────────────
+  const openProjectDetail = (project) => {
+    setProjectEditMode(false);
+    setDetailProject(project);
+  };
+
+  const startEditProject = () => {
+    if (!detailProject) return;
+    setProjectForm({
+      title: detailProject.title || '',
+      category: detailProject.category || '',
+      description: detailProject.description || '',
+      budgetMin: detailProject.budgetMin ?? '',
+      budgetMax: detailProject.budgetMax ?? '',
+      status: detailProject.statusRaw || 'completed'
+    });
+    setProjectEditMode(true);
+  };
+
+  const handleSaveProject = () => {
+    if (!detailProject?.id || !projectForm) return;
+    dispatch(updateProjectStart({
+      id: detailProject.id,
+      payload: {
+        title: projectForm.title,
+        category: projectForm.category || null,
+        description: projectForm.description,
+        budgetMin: projectForm.budgetMin === '' ? null : projectForm.budgetMin,
+        budgetMax: projectForm.budgetMax === '' ? null : projectForm.budgetMax,
+        status: projectForm.status
+      }
+    }));
+  };
+
+  // Close the portfolio editor once the update round-trips successfully.
+  useEffect(() => {
+    if (updateProjectSuccess) {
+      toast.success('Portfolio item updated');
+      setProjectEditMode(false);
+      setDetailProject(null);
+      setProjectForm(null);
+      dispatch(resetUpdateProjectFlag());
+    }
+  }, [updateProjectSuccess, dispatch]);
+
+  useEffect(() => {
+    if (updateProjectError) {
+      toast.error(typeof updateProjectError === 'string' ? updateProjectError : 'Failed to update portfolio item');
+      dispatch(resetUpdateProjectFlag());
+    }
+  }, [updateProjectError, dispatch]);
+
+  // ── Saved Quotes (bookmarks) ──────────────────────────────────────────
+  const savedQuoteRecords = apiSavedQuotes || [];
+  const savedQuoteIds = new Set(savedQuoteRecords.map((s) => s.quoteId));
+
+  const toggleSaveQuote = (quoteId) => {
+    if (!currentUser?.id || !quoteId) return;
+    const existing = savedQuoteRecords.find((s) => s.quoteId === quoteId);
+    if (existing) {
+      dispatch(removeSavedQuoteStart(existing.id));
+    } else {
+      dispatch(addSavedQuoteStart({ userId: currentUser.id, quoteId }));
+    }
+  };
+
+  // ── Inbox (WhatsApp-style chat + embedded quote actions) ──────────────
+  // Load a thread when a peer is selected; mark it read (locally + over socket).
+  useEffect(() => {
+    const pid = inboxPeer?.id;
+    if (!pid) return;
+    dispatch(setActiveThreadPeer(pid));
+    dispatch(fetchMessagesStart({ withUserId: pid }));
+    dispatch(markThreadReadLocal(pid));
+    emitMessageRead(pid);
+    return () => { dispatch(setActiveThreadPeer(null)); };
+  }, [inboxPeer?.id, dispatch]);
+
+  // Auto-scroll the open thread to the newest message.
+  useEffect(() => {
+    if (activeTab === 'inbox' && inboxScrollRef.current) {
+      inboxScrollRef.current.scrollTop = inboxScrollRef.current.scrollHeight;
+    }
+  }, [threadMessages, activeTab, inboxPeer?.id]);
+
+  const handleInboxSend = async (e) => {
+    e.preventDefault();
+    const text = inboxDraft.trim();
+    const pid = inboxPeer?.id;
+    if (!text || !pid || inboxSending || !currentUser?.id) return;
+    setInboxSending(true);
+    setInboxDraft('');
+    // Try socket first; fall back to REST if the socket is disconnected.
+    const ack = await emitMessage(pid, text);
+    if (!ack?.ok) {
+      dispatch(sendMessageStart({ receiverId: pid, content: text }));
+    }
+    setInboxSending(false);
+  };
+
+  // Small bookmark toggle placed to the right of a quote card's datetime.
+  const renderSaveButton = (quoteId) => {
+    const saved = savedQuoteIds.has(quoteId);
+    return (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); toggleSaveQuote(quoteId); }}
+        title={saved ? 'Remove from Saved Quotes' : 'Save this quote'}
+        className={`p-1.5 rounded-lg transition-colors ${saved ? 'text-coral-orange hover:bg-white/10' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>
+        <Bookmark className={`h-4 w-4 ${saved ? 'fill-current' : ''}`} />
+      </button>);
   };
 
   useEffect(() => {
@@ -844,14 +1056,21 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
       return <span className="text-sm text-white drop-shadow-md">Marked done · awaiting customer confirmation</span>;
     }
     if (req.status === 'closed' && iResponded) {
+      const inPortfolio = portfolioProjectFor(req);
       return (
         <div className="flex items-center gap-3 flex-wrap">
           <span className="text-sm text-green-300 font-medium">Completed</span>
-          <button
-            onClick={(e) => { e.stopPropagation(); handleAddToPortfolio(req); }}
-            className="px-4 py-2 rounded-lg bg-coral-orange text-black text-sm font-semibold hover:bg-coral-orange/90 transition-all duration-300">
-            Add to Portfolio
-          </button>
+          {inPortfolio
+            ? <button
+                onClick={(e) => { e.stopPropagation(); setRemovePortfolioTarget({ project: inPortfolio, request: req }); }}
+                className="px-4 py-2 rounded-lg bg-red-400/20 text-red-300 border border-red-400/40 text-sm font-semibold hover:bg-red-400/30 transition-all duration-300">
+                Remove from Portfolio
+              </button>
+            : <button
+                onClick={(e) => { e.stopPropagation(); handleAddToPortfolio(req); }}
+                className="px-4 py-2 rounded-lg bg-coral-orange text-black text-sm font-semibold hover:bg-coral-orange/90 transition-all duration-300">
+                Add to Portfolio
+              </button>}
         </div>);
     }
     if (myResponseDeclined) {
@@ -930,19 +1149,34 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
   };
 
   // Projects come from the API (/projects?userId=).
+  // A customer's project is a request they posted (open → the provider has
+  // "Quoted" it). A provider's/realtor's project is a portfolio piece, where
+  // "Quoted" makes no sense — so business roles get showcase-oriented labels.
   const PROJECT_STATUS_LABEL = {
     open: 'Quoted', in_progress: 'In Progress', completed: 'Completed', cancelled: 'Cancelled'
   };
+  const PROJECT_STATUS_LABEL_BUSINESS = {
+    open: 'Draft', in_progress: 'In Progress', completed: 'Completed', cancelled: 'Cancelled'
+  };
+  const projectStatusLabels = isBusinessRole ? PROJECT_STATUS_LABEL_BUSINESS : PROJECT_STATUS_LABEL;
   const recentProjects = (apiProjects || []).map((p) => ({
     id: p.id,
     title: p.title,
     provider: p.category || 'Project',
-    status: PROJECT_STATUS_LABEL[p.status] || 'Quoted',
+    status: projectStatusLabels[p.status] || projectStatusLabels.completed,
     date: p.createdAt,
     cost: p.budgetMin
       ? `$${p.budgetMin}${p.budgetMax ? ` - $${p.budgetMax}` : ''}`
       : 'Not set',
-    rating: null
+    rating: null,
+    // Raw fields kept for the editable portfolio modal.
+    category: p.category || '',
+    description: p.description || '',
+    budgetMin: p.budgetMin ?? '',
+    budgetMax: p.budgetMax ?? '',
+    statusRaw: p.status || 'open',
+    location: p.location || '',
+    photos: Array.isArray(p.photos) ? p.photos : []
   }));
 
 
@@ -976,7 +1210,8 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
       ? (q.provider.businessName || `${q.provider.firstName || ''} ${q.provider.lastName || ''}`.trim())
       : '',
     photos: q.photos || [],
-    bids: q.responses || []
+    bids: q.responses || [],
+    createdAt: q.createdAt
   }));
 
   // Dashboard tab order is role-specific:
@@ -986,48 +1221,36 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
   const TAB = {
     overview: { id: 'overview', label: 'Overview', icon: User },
     favorites: { id: 'favorites', label: 'Favorites', icon: Star },
-    quotes: { id: 'quotes', label: 'Quotes', icon: FileText }
+    quotes: { id: 'quotes', label: 'Quotes', icon: FileText },
+    inbox: { id: 'inbox', label: 'Inbox', icon: MessageSquare }
   };
   const dashboardTabs = isRealtor
     ? [
         TAB.overview,
         { id: 'showings', label: 'Opportunity', icon: Building },
-        { id: 'projects', label: 'My Listing', icon: Home },
+        { id: 'projects', label: 'My Portfolio', icon: Home },
         { id: 'requests', label: 'Meeting Requests', icon: Calendar },
         TAB.quotes,
-        TAB.favorites
+        TAB.favorites,
+        TAB.inbox
       ]
     : currentUser?.role === 'provider'
     ? [
         TAB.overview,
         { id: 'requests', label: 'Client Requests', icon: Calendar },
-        { id: 'projects', label: 'My Projects', icon: Home },
+        { id: 'projects', label: 'My Portfolio', icon: Home },
         TAB.quotes,
-        TAB.favorites
+        TAB.favorites,
+        TAB.inbox
       ]
     : [
         TAB.overview,
-        { id: 'projects', label: 'My Projects', icon: Home },
         TAB.favorites,
         TAB.quotes,
-        { id: 'showings', label: 'My Showings', icon: Building }
+        { id: 'showings', label: 'Requested Tour', icon: Building },
+        TAB.inbox
       ];
 
-  // "Saved Quotes" = the user's quote requests that already have provider responses.
-  const savedQuotes = (apiQuotes || [])
-    .filter((q) => Array.isArray(q.responses) && q.responses.length > 0)
-    .map((q) => {
-      const resp = q.responses[0];
-      const prov = resp.provider || {};
-      return {
-        id: q.id,
-        service: q.category,
-        provider: prov.businessName || `${prov.firstName || ''} ${prov.lastName || ''}`.trim() || 'Provider',
-        amount: resp.amount ? `$${resp.amount}` : 'Quoted',
-        validUntil: q.createdAt,
-        status: q.status === 'accepted' ? 'Accepted' : 'Pending'
-      };
-    });
 
 
   if (!currentUser) {
@@ -1083,7 +1306,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
       {/* Quick Stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
         <div
-        onClick={() => setActiveTab('projects')}
+        onClick={() => setActiveTab(isBusinessRole ? 'projects' : 'showings')}
         className="rounded-2xl shadow-lg p-4 sm:p-6 text-center relative overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105"
         style={{
           background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
@@ -1091,9 +1314,9 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
           border: '1px solid rgba(255,255,255,0.2)',
           boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
         }}>
-        
-          <div className="text-2xl font-bold text-white mb-2 drop-shadow-lg">{recentProjects.length}</div>
-          <div className="text-white drop-shadow-md">{isRealtor ? 'Total Listing' : 'Total Projects'}</div>
+
+          <div className="text-2xl font-bold text-white mb-2 drop-shadow-lg">{isBusinessRole ? recentProjects.length : (Array.isArray(showRequests) ? showRequests.length : 0)}</div>
+          <div className="text-white drop-shadow-md">{isBusinessRole ? 'Total Portfolio' : 'Requested Tours'}</div>
         </div>
         <div
         onClick={() => setActiveTab('favorites')}
@@ -1118,7 +1341,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
           boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
         }}>
         
-          <div className="text-2xl font-bold text-white mb-2 drop-shadow-lg">{savedQuotes.length}</div>
+          <div className="text-2xl font-bold text-white mb-2 drop-shadow-lg">{savedQuoteRecords.length}</div>
           <div className="text-white drop-shadow-md">Saved Quotes</div>
         </div>
       </div>
@@ -1156,7 +1379,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
   const renderProjects = () =>
   <div className="space-y-6 animate-fadeIn">
       <div className="profile-head-row flex items-center justify-between">
-        <h3 className="text-xl text-white drop-shadow-lg">{isRealtor ? 'My Listing' : 'My Projects'}</h3>
+        <h3 className="text-xl text-white drop-shadow-lg">{isBusinessRole ? 'My Portfolio' : 'My Projects'}</h3>
         {isRealtor ?
           <div className="relative">
             <button
@@ -1200,7 +1423,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
       {recentProjects.map((project) =>
     <div
       key={project.id}
-      onClick={() => setDetailProject(project)}
+      onClick={() => openProjectDetail(project)}
       role="button"
       tabIndex={0}
       className="group relative rounded-2xl p-6 overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-2 cursor-pointer"
@@ -1245,23 +1468,17 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
             </div>
             <div className="flex space-x-3">
               <button
-                onClick={(e) => { e.stopPropagation(); setDetailProject(project); }}
+                onClick={(e) => { e.stopPropagation(); openProjectDetail(project); }}
                 className="px-3 py-1 bg-sky-blue text-white rounded-xl text-sm hover:bg-sky-blue/90 hover:scale-105 transition-all duration-300 font-medium">
                 View Details
               </button>
-              {project.status === 'Completed' && !project.rating &&
+              {!isBusinessRole && project.status === 'Completed' && !project.rating &&
           <button
             onClick={(e) => e.stopPropagation()}
             className="px-3 py-1 bg-coral-orange text-white rounded-xl text-sm hover:bg-coral-orange/90 hover:scale-105 transition-all duration-300 font-medium">
                   Leave Review
                 </button>
           }
-              <button
-                onClick={(e) => e.stopPropagation()}
-                className="px-3 py-1 border border-white/30 text-white rounded-xl text-sm hover:bg-white/20 hover:border-white/50 transition-all duration-300 font-medium">
-                <MessageSquare className="h-3 w-3 inline mr-1" />
-                Message
-              </button>
             </div>
           </div>
 
@@ -1323,13 +1540,23 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
 
 
   const renderQuotes = () => {
-    // Sub-tabs under the Quotes tab. "My Quote Requests" is the main/default.
+    // Sub-tabs under the Quotes tab.
+    //   Business roles: My Quote Requests · Quoted · Completed · Saved.
+    //   Users:          All · Completed · Saved.
     const quotesSubTabs = [
-      { id: 'requests', label: 'My Quote Requests' },
-      ...(isBusinessRole ? [{ id: 'sent', label: 'Sent Quotes & Completed Jobs' }] : []),
+      { id: 'requests', label: isBusinessRole ? 'My Quote Requests' : 'All' },
+      ...(isBusinessRole
+        ? [{ id: 'quoted', label: 'Quoted' }, { id: 'completed', label: 'Completed' }]
+        : [{ id: 'completed', label: 'Completed' }]),
       { id: 'saved', label: 'Saved Quotes' }
     ];
     const activeSub = quotesSubTabs.some((t) => t.id === quotesSubTab) ? quotesSubTab : 'requests';
+    // Users' own requests that are done.
+    const completedRequests = quoteRequests.filter((q) => q.status === 'closed');
+    // Split the requests I've quoted by lifecycle: closed → Completed, the rest
+    // (responded / accepted / in-progress) → Quoted.
+    const quotedIncoming = sentIncomingRequests.filter((r) => r.status !== 'closed');
+    const completedIncoming = sentIncomingRequests.filter((r) => r.status === 'closed');
     const glass = {
       background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
       backdropFilter: 'blur(20px)',
@@ -1339,6 +1566,53 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
     const emptyState = (text) =>
       <div className="rounded-2xl p-8 text-center relative overflow-hidden" style={glass}>
         <p className="text-white drop-shadow-md">{text}</p>
+      </div>;
+
+    // One of the user's own quote-request cards (used by both All and Completed).
+    // Clicking the card opens the read-only details modal; the action buttons
+    // and save toggle stop propagation so they still work independently.
+    const renderCustomerQuoteCard = (request) =>
+      <div
+        key={request.id}
+        onClick={() => setDetailRequest({ ...request, name: request.name || currentUser?.name || 'Quote Request' })}
+        role="button"
+        tabIndex={0}
+        className="rounded-2xl p-6 relative overflow-hidden cursor-pointer transition-transform duration-200 hover:-translate-y-0.5"
+        style={glass}>
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h4 className="text-white font-medium drop-shadow-md mb-2">{request.category}</h4>
+            <p className="text-white text-sm drop-shadow-md">{request.description}</p>
+            <div className="flex items-center space-x-4 mt-2 text-xs text-white drop-shadow-md">
+              <span><MapPin className="h-3 w-3 inline mr-1" />{request.location}</span>
+              <span>Budget: ${request.budgetMin}{request.budgetMax ? ` - $${request.budgetMax}` : '+'}</span>
+            </div>
+          </div>
+          <span className={`px-3 py-1 rounded-full text-xs font-medium ${request.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' :
+            request.status === 'closed' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
+            request.status === 'declined' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
+            'bg-white/20 text-white border border-white/30'}`
+            }>
+            {statusLabel(request.status)}
+          </span>
+        </div>
+        {request.photos && request.photos.length > 0 &&
+          <div className="flex space-x-2 mb-4">
+            {request.photos.map((photo, idx) =>
+              <img key={idx} src={photo} alt={`Photo ${idx + 1}`} className="w-16 h-16 object-cover rounded-md" />
+            )}
+          </div>
+        }
+        <div className="pt-3 border-t border-white/20" onClick={(e) => e.stopPropagation()}>
+          {renderCustomerQuoteActions(request)}
+        </div>
+        <div className="flex items-center justify-between text-xs text-white/70 drop-shadow-md pt-3 mt-3 border-t border-white/20">
+          <span className="flex items-center">
+            <Calendar className="h-3 w-3 mr-1" />
+            {request.createdAt ? new Date(request.createdAt).toLocaleString() : ''}
+          </span>
+          {renderSaveButton(request.id)}
+        </div>
       </div>;
 
     return (
@@ -1368,131 +1642,119 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
         )}
       </div>
 
-      {/* Sent Quotes & Completed Jobs (business roles) */}
-      {activeSub === 'sent' && isBusinessRole &&
+      {/* Quoted — client requests I've responded to that are still active */}
+      {activeSub === 'quoted' && isBusinessRole &&
         <div className="space-y-4">
           <p className="text-white/80 drop-shadow-md text-sm">
-            Client requests you've already quoted or completed.
+            Client requests you've quoted and are awaiting or working on.
           </p>
-          {sentIncomingRequests.length > 0
-            ? sentIncomingRequests.map((req) => renderIncomingRequestCard(req))
-            : emptyState('No sent quotes or completed jobs yet')}
+          {quotedIncoming.length > 0
+            ? quotedIncoming.map((req) => renderIncomingRequestCard(req))
+            : emptyState('No active quoted requests yet')}
         </div>
       }
 
-      {/* My Quote Requests (main) */}
+      {/* Completed — closed jobs (business roles) */}
+      {activeSub === 'completed' && isBusinessRole &&
+        <div className="space-y-4">
+          <p className="text-white/80 drop-shadow-md text-sm">
+            Jobs you've completed for clients.
+          </p>
+          {completedIncoming.length > 0
+            ? completedIncoming.map((req) => renderIncomingRequestCard(req))
+            : emptyState('No completed jobs yet')}
+        </div>
+      }
+
+      {/* Completed — the user's own requests that are done */}
+      {activeSub === 'completed' && !isBusinessRole &&
+        <div className="space-y-4">
+          {completedRequests.length > 0
+            ? completedRequests.map((request) => renderCustomerQuoteCard(request))
+            : emptyState('No completed quotes yet')}
+        </div>
+      }
+
+      {/* All / My Quote Requests (main) */}
       {activeSub === 'requests' &&
       <div>
-        {quoteRequests.length === 0 ?
-      emptyState('No quote requests yet') :
-
-      <div className="space-y-4">
-            {quoteRequests.map((request) =>
-        <div
-          key={request.id}
-          className="rounded-2xl p-6 relative overflow-hidden"
-          style={{
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255,255,255,0.2)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
-          }}>
-          
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h4 className="text-white font-medium drop-shadow-md mb-2">{request.category}</h4>
-                    <p className="text-white text-sm drop-shadow-md">{request.description}</p>
-                    <div className="flex items-center space-x-4 mt-2 text-xs text-white drop-shadow-md">
-                      <span><MapPin className="h-3 w-3 inline mr-1" />{request.location}</span>
-                      <span>Budget: ${request.budgetMin}{request.budgetMax ? ` - $${request.budgetMax}` : '+'}</span>
-                    </div>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${request.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' :
-            request.status === 'closed' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
-            request.status === 'declined' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
-            'bg-white/20 text-white border border-white/30'}`
-            }>
-                    {statusLabel(request.status)}
-                  </span>
-                </div>
-                {request.photos && request.photos.length > 0 &&
-          <div className="flex space-x-2 mb-4">
-                    {request.photos.map((photo, idx) =>
-            <img
-              key={idx}
-              src={photo}
-              alt={`Photo ${idx + 1}`}
-              className="w-16 h-16 object-cover rounded-md" />
-
-            )}
-                  </div>
-          }
-                <div className="pt-3 border-t border-white/20">
-                  {renderCustomerQuoteActions(request)}
-                </div>
-              </div>
-        )}
-          </div>
-      }
+        {quoteRequests.length === 0
+          ? emptyState('No quote requests yet')
+          : <div className="space-y-4">
+              {quoteRequests.map((request) => renderCustomerQuoteCard(request))}
+            </div>
+        }
       </div>
       }
 
-      {/* Saved Quotes from Providers */}
+      {/* Saved Quotes — anything bookmarked with the Save icon, from any tab */}
       {activeSub === 'saved' &&
       <div className="space-y-4">
-          {savedQuotes.length > 0 ? savedQuotes.map((quote) =>
-        <div
-          key={quote.id}
-          className="group relative rounded-2xl p-6 overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-2"
-          style={{
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255,255,255,0.2)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2)'
-          }}>
-          
-              {/* Animated background gradient */}
-              <div className="absolute inset-0 bg-gradient-to-br from-sky-blue/10 via-transparent to-coral-orange/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-
-              <div className="relative z-10">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="text-lg text-white mb-1 drop-shadow-md group-hover:text-white transition-colors duration-300">{quote.service}</h4>
-                    <p className="text-white mb-2 drop-shadow-md group-hover:text-white transition-colors duration-300">{quote.provider}</p>
-                    <div className="flex items-center space-x-4 text-sm text-white">
-                      <span className="drop-shadow-md group-hover:text-white transition-colors duration-300">Valid until: {new Date(quote.validUntil).toLocaleDateString()}</span>
-                      <span className={`px-2 py-1 rounded-full text-xs ${quote.status === 'Accepted' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
-                  'bg-orange-500/20 text-orange-300 border border-orange-500/30'}`
-                  }>
-                        {quote.status}
-                      </span>
-                    </div>
+          <p className="text-white/80 drop-shadow-md text-sm">
+            Quotes you've bookmarked with the <Bookmark className="h-3 w-3 inline -mt-0.5" /> icon.
+          </p>
+          {savedQuoteRecords.length > 0 ? savedQuoteRecords.map((rec) => {
+            const q = rec.quote || {};
+            const requesterName = q.requester
+              ? `${q.requester.firstName || ''} ${q.requester.lastName || ''}`.trim()
+              : (q.name || '');
+            const providerName = q.provider
+              ? (q.provider.businessName || `${q.provider.firstName || ''} ${q.provider.lastName || ''}`.trim())
+              : '';
+            // Is this one of my own requests, or an incoming client request I saved?
+            const mine = q.userId === currentUser?.id;
+            const counterparty = mine ? providerName : requesterName;
+            // Open the same read-only details modal the other quote cards use.
+            const openSaved = () => setDetailRequest({
+              ...q,
+              name: q.name || requesterName || 'Client',
+              email: q.email || q.requester?.email || '',
+              phone: q.phone || q.requester?.phone || ''
+            });
+            return (
+              <div
+                key={rec.id}
+                onClick={openSaved}
+                role="button"
+                tabIndex={0}
+                className="rounded-2xl p-6 relative overflow-hidden cursor-pointer transition-transform duration-200 hover:-translate-y-0.5"
+                style={glass}>
+                <div className="flex justify-between items-start gap-4 mb-3">
+                  <div className="min-w-0">
+                    <h4 className="text-lg text-white font-medium drop-shadow-md">{q.category || 'Quote'}</h4>
+                    {counterparty &&
+                      <p className="text-sm text-white/80 drop-shadow-md mt-0.5">
+                        {mine ? 'Provider: ' : 'From: '}{counterparty}
+                      </p>
+                    }
                   </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-white drop-shadow-lg group-hover:text-white transition-colors duration-300">{quote.amount}</div>
-                    <div className="flex space-x-2 mt-2">
-                      {quote.status === 'Pending' &&
-                  <>
-                          <button className="px-3 py-1 bg-green-600 text-white rounded-xl text-sm hover:bg-green-600/90 hover:scale-105 transition-all duration-300 font-medium">
-                            Accept
-                          </button>
-                          <button className="px-3 py-1 bg-coral-orange text-black rounded-xl text-sm hover:bg-coral-orange/90 hover:scale-105 transition-all duration-300 font-medium">
-                            Decline
-                          </button>
-                        </>
-                  }
-                      <button className="px-3 py-1 border border-white/30 text-white rounded-xl text-sm hover:bg-white/20 hover:border-white/50 transition-all duration-300 font-medium">
-                        View
-                      </button>
-                    </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      q.status === 'closed' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
+                      q.status === 'declined' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
+                      q.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' :
+                      'bg-white/20 text-white border border-white/30'}`}>
+                      {statusLabel(q.status)}
+                    </span>
+                    {renderSaveButton(q.id)}
                   </div>
                 </div>
-              </div>
-
-              {/* Shine effect */}
-              <div className="absolute inset-0 -top-2 -left-2 w-0 h-0 bg-gradient-to-br from-transparent via-white/20 to-transparent group-hover:w-full group-hover:h-full transition-all duration-700 opacity-0 group-hover:opacity-100"></div>
-            </div>
-        ) : emptyState('No saved quotes yet')}
+                {q.description &&
+                  <p className="text-sm text-white/90 drop-shadow-md mb-3 leading-relaxed">{q.description}</p>
+                }
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-white/80 drop-shadow-md">
+                  {q.location &&
+                    <span className="flex items-center"><MapPin className="h-3 w-3 mr-1" />{q.location}</span>
+                  }
+                  {(q.budgetMin || q.budgetMax) &&
+                    <span>Budget: ${q.budgetMin}{q.budgetMax ? ` - $${q.budgetMax}` : '+'}</span>
+                  }
+                  {q.createdAt &&
+                    <span className="flex items-center"><Calendar className="h-3 w-3 mr-1" />{new Date(q.createdAt).toLocaleDateString()}</span>
+                  }
+                </div>
+              </div>);
+          }) : emptyState('No saved quotes yet')}
       </div>
       }
     </div>
@@ -1503,6 +1765,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
   // Incoming requests directed at this provider/realtor (/quotes?providerId=).
   const incomingRequests = (incomingQuotes || []).map((q) => ({
     id: q.id,
+    requesterId: q.userId,
     name: q.name ||
     (q.requester ? `${q.requester.firstName || ''} ${q.requester.lastName || ''}`.trim() : '') ||
     'Client',
@@ -1610,11 +1873,14 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
           <Calendar className="h-3 w-3 mr-1" />
           {req.createdAt ? new Date(req.createdAt).toLocaleString() : ''}
         </span>
-        {req.isMeetingRequest &&
-          <span className="px-2 py-0.5 rounded-full bg-sky-blue/20 border border-sky-blue/30 text-white">
-            Meeting Request
-          </span>
-        }
+        <div className="flex items-center gap-2">
+          {req.isMeetingRequest &&
+            <span className="px-2 py-0.5 rounded-full bg-sky-blue/20 border border-sky-blue/30 text-white">
+              Meeting Request
+            </span>
+          }
+          {renderSaveButton(req.id)}
+        </div>
       </div>
     </div>);
   };
@@ -1671,8 +1937,16 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
     const renderCard = (req, mode) => {
       const cfg = SHOW_STATUS[req.status] || SHOW_STATUS.pending;
       const isAssignedToMe = req.assignedAgentId === currentUser?.id;
+      // Customer cards are read-only — clicking opens the full details modal.
+      const clickable = mode === 'customer';
       return (
-        <div key={req.id} className="rounded-2xl p-5 relative overflow-hidden flex flex-col h-full" style={glassPanelStyle}>
+        <div
+          key={req.id}
+          onClick={clickable ? () => setDetailShowing(req) : undefined}
+          role={clickable ? 'button' : undefined}
+          tabIndex={clickable ? 0 : undefined}
+          className={`rounded-2xl p-5 relative overflow-hidden flex flex-col h-full ${clickable ? 'cursor-pointer transition-transform duration-200 hover:-translate-y-0.5' : ''}`}
+          style={glassPanelStyle}>
           <div className="flex justify-between items-start gap-4 mb-3">
             <div className="min-w-0">
               <h4 className="text-lg text-white font-semibold drop-shadow-md truncate">
@@ -1758,12 +2032,12 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
       <div className="space-y-8 animate-fadeIn">
         <div>
           <h3 className="text-xl text-white drop-shadow-lg mb-1">
-            {isRealtor ? 'Opportunity' : 'My Property Showings'}
+            {isRealtor ? 'Opportunity' : 'Requested Tours'}
           </h3>
           <p className="text-white drop-shadow-md text-sm">
             {isRealtor
               ? 'Claim a showing posted by a customer, then mark it complete after the visit.'
-              : 'Property listings you’ve posted for a realtor to host.'}
+              : 'Property tours you’ve requested — tap a card for full details.'}
           </p>
         </div>
 
@@ -1839,6 +2113,205 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
             )}
           </>
         )}
+      </div>);
+  };
+
+
+  // ── Inbox tab: WhatsApp-style two-pane chat with an embedded quote panel ──
+  const renderInbox = () => {
+    const me = Number(currentUser?.id);
+
+    // Contact list = everyone I have a quote with, then overlaid with real
+    // conversations (which carry last-message text + unread counts).
+    const byId = new Map();
+    const upsert = (id, patch) => {
+      const k = Number(id);
+      if (!k || k === me) return;
+      byId.set(k, { id: k, ...(byId.get(k) || {}), ...patch });
+    };
+    if (isBusinessRole) {
+      incomingRequests.forEach((r) => { if (r.requesterId) upsert(r.requesterId, { name: r.name || 'Client' }); });
+    } else {
+      quoteRequests.forEach((q) => {
+        if (q.providerId) upsert(q.providerId, { name: q.providerName || 'Provider' });
+        (q.bids || []).forEach((b) => {
+          const pid = b.providerId || b.provider?.id;
+          const pname = b.provider?.businessName || `${b.provider?.firstName || ''} ${b.provider?.lastName || ''}`.trim();
+          if (pid) upsert(pid, { name: pname || 'Provider' });
+        });
+      });
+    }
+    (conversations || []).forEach((c) => {
+      const p = c.partner || {};
+      const name = p.businessName || `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'User';
+      upsert(p.id, { name, role: p.role, lastMessage: c.lastMessage?.content || '', lastTime: c.lastMessage?.createdAt, unread: c.unreadCount || 0 });
+    });
+    let contacts = Array.from(byId.values());
+    if (inboxSearch.trim()) {
+      const s = inboxSearch.trim().toLowerCase();
+      contacts = contacts.filter((c) => (c.name || '').toLowerCase().includes(s));
+    }
+    contacts.sort((a, b) => (b.unread || 0) - (a.unread || 0) || (new Date(b.lastTime || 0) - new Date(a.lastTime || 0)));
+
+    const peerId = inboxPeer?.id ? Number(inboxPeer.id) : null;
+    const peerName = inboxPeer?.name || '';
+
+    const thread = (threadMessages || []).filter((m) =>
+      (Number(m.senderId) === me && Number(m.receiverId) === peerId) ||
+      (Number(m.receiverId) === me && Number(m.senderId) === peerId)
+    );
+
+    // Quotes shared with the open peer → the embedded action panel.
+    const peerQuotes = !peerId ? [] : (isBusinessRole
+      ? incomingRequests
+          .filter((r) => Number(r.requesterId) === peerId)
+          .map((r) => ({ id: r.id, side: 'provider', data: r, category: r.category, status: r.status, budgetMin: r.budgetMin, budgetMax: r.budgetMax }))
+      : quoteRequests
+          .filter((q) => Number(q.providerId) === peerId || (q.bids || []).some((b) => Number(b.providerId || b.provider?.id) === peerId))
+          .map((q) => ({ id: q.id, side: 'customer', data: q, category: q.category, status: q.status, budgetMin: q.budgetMin, budgetMax: q.budgetMax })));
+    const activeQuote = peerQuotes.find((x) => x.id === inboxQuoteId) || peerQuotes[0] || null;
+
+    return (
+      <div className="animate-fadeIn">
+        <div className="rounded-2xl overflow-hidden" style={glassPanelStyle}>
+          <div className="grid grid-cols-1 md:grid-cols-3" style={{ height: '70vh' }}>
+            {/* Left: contacts list */}
+            <div className={`md:col-span-1 md:border-r border-white/15 flex-col min-h-0 ${peerId ? 'hidden md:flex' : 'flex'}`}>
+              <div className="p-3 border-b border-white/15">
+                <div className="relative">
+                  <Search className="h-4 w-4 text-white/50 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    value={inboxSearch}
+                    onChange={(e) => setInboxSearch(e.target.value)}
+                    placeholder="Search chats"
+                    className="w-full pl-9 pr-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/50 text-sm focus:outline-none focus:border-coral-orange" />
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto scrollbar-hide">
+                {contacts.length === 0
+                  ? <p className="text-white/60 text-sm p-4 text-center">No conversations yet.</p>
+                  : contacts.map((c) =>
+                    <button
+                      key={c.id}
+                      onClick={() => { setInboxPeer(c); setInboxQuoteId(null); }}
+                      className={`w-full text-left px-4 py-3 flex items-center gap-3 border-b border-white/10 transition-colors ${peerId === c.id ? 'bg-white/15' : 'hover:bg-white/10'}`}>
+                      <span className="h-10 w-10 rounded-full bg-coral-orange/80 text-black font-semibold flex items-center justify-center shrink-0">
+                        {(c.name || 'U').charAt(0).toUpperCase()}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-white font-medium truncate">{c.name}</span>
+                          {c.lastTime && <span className="text-[10px] text-white/50 shrink-0">{new Date(c.lastTime).toLocaleDateString()}</span>}
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-white/60 truncate">{c.lastMessage || 'Tap to chat'}</span>
+                          {c.unread > 0 && <span className="text-[10px] font-bold bg-green-500 text-white rounded-full px-1.5 py-0.5 shrink-0">{c.unread}</span>}
+                        </div>
+                      </div>
+                    </button>
+                  )}
+              </div>
+            </div>
+
+            {/* Right: active thread */}
+            <div className={`md:col-span-2 flex-col min-h-0 ${peerId ? 'flex' : 'hidden md:flex'}`}>
+              {!peerId ? (
+                <div className="flex-1 flex items-center justify-center text-white/60 text-sm p-6 text-center">
+                  Select a conversation to start chatting.
+                </div>
+              ) : (
+                <>
+                  {/* Thread header */}
+                  <div className="p-3 border-b border-white/15 flex items-center gap-3">
+                    <button onClick={() => setInboxPeer(null)} className="md:hidden p-1 text-white">
+                      <ChevronDown className="h-5 w-5 rotate-90" />
+                    </button>
+                    <span className="h-9 w-9 rounded-full bg-coral-orange/80 text-black font-semibold flex items-center justify-center shrink-0">
+                      {(peerName || 'U').charAt(0).toUpperCase()}
+                    </span>
+                    <span className="text-white font-semibold truncate">{peerName}</span>
+                  </div>
+
+                  {/* Embedded quote panel — hidden behind a "Quotes" toggle,
+                      opens in place at the top of the thread. */}
+                  {activeQuote &&
+                    <div className="border-b border-white/15">
+                      <button
+                        onClick={() => setInboxQuotePanelOpen((v) => !v)}
+                        className="w-full flex items-center justify-between px-4 py-2 text-white hover:bg-white/5 transition-colors">
+                        <span className="flex items-center gap-2 font-medium">
+                          <FileText className="h-4 w-4" /> Quotes
+                        </span>
+                        <ChevronDown className={`h-4 w-4 transition-transform ${inboxQuotePanelOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {inboxQuotePanelOpen &&
+                    <div className="px-4 py-3 bg-white/5">
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileText className="h-4 w-4 text-white/70 shrink-0" />
+                          {peerQuotes.length > 1
+                            ? <select
+                                value={activeQuote.id}
+                                onChange={(e) => setInboxQuoteId(Number(e.target.value))}
+                                className="bg-white/10 border border-white/20 text-white text-sm rounded px-2 py-1 max-w-[220px]">
+                                {peerQuotes.map((x) =>
+                                  <option key={x.id} value={x.id} className="text-black">{(x.category || 'Quote')} · {statusLabel(x.status)}</option>
+                                )}
+                              </select>
+                            : <span className="text-white font-medium truncate">{activeQuote.category || 'Quote'}</span>}
+                        </div>
+                        <span className="text-xs text-white/70 shrink-0">
+                          {(activeQuote.budgetMin || activeQuote.budgetMax) ? `$${activeQuote.budgetMin || 0}${activeQuote.budgetMax ? ` - $${activeQuote.budgetMax}` : '+'}` : statusLabel(activeQuote.status)}
+                        </span>
+                      </div>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        {activeQuote.side === 'provider'
+                          ? renderProviderActions(activeQuote.data)
+                          : renderCustomerQuoteActions(activeQuote.data)}
+                      </div>
+                    </div>
+                      }
+                    </div>
+                  }
+
+                  {/* Message bubbles */}
+                  <div ref={inboxScrollRef} className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-hide">
+                    {messagesLoading && thread.length === 0
+                      ? <p className="text-center text-white/60 text-sm py-6">Loading…</p>
+                      : thread.length === 0
+                      ? <p className="text-center text-white/60 text-sm py-6">No messages yet. Say hello 👋</p>
+                      : thread.map((m) => {
+                          const mine = Number(m.senderId) === me;
+                          return (
+                            <div key={m.id} className={`max-w-[78%] px-3 py-2 rounded-2xl ${mine ? 'ml-auto bg-sky-blue text-white rounded-br-sm' : 'mr-auto bg-white/15 text-white rounded-bl-sm'}`}>
+                              <div className="whitespace-pre-wrap break-words text-sm">{m.content}</div>
+                              <div className="text-[10px] text-white/60 mt-0.5 text-right">
+                                {m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                              </div>
+                            </div>);
+                        })}
+                  </div>
+
+                  {/* Composer */}
+                  <form onSubmit={handleInboxSend} className="p-3 border-t border-white/15 flex items-center gap-2">
+                    <input
+                      value={inboxDraft}
+                      onChange={(e) => setInboxDraft(e.target.value)}
+                      placeholder="Type a message…"
+                      disabled={inboxSending}
+                      className="flex-1 min-w-0 px-4 py-2 rounded-full bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:border-coral-orange disabled:opacity-60" />
+                    <button
+                      type="submit"
+                      disabled={!inboxDraft.trim() || inboxSending}
+                      className="shrink-0 h-10 w-10 rounded-full bg-coral-orange text-black flex items-center justify-center hover:bg-coral-orange/90 transition-colors disabled:opacity-50">
+                      <Send className="h-4 w-4" />
+                    </button>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       </div>);
   };
 
@@ -1922,6 +2395,7 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
         {activeTab === 'quotes' && renderQuotes()}
         {activeTab === 'requests' && renderIncomingRequests()}
         {activeTab === 'showings' && renderShowings()}
+        {activeTab === 'inbox' && renderInbox()}
         </>
         }
 
@@ -2817,45 +3291,261 @@ export function ProfilePage({ navigate, currentUser, setCurrentUser, view = 'das
         </div>
       }
 
-      {/* Project / listing details modal (opened by clicking a project card) */}
-      {detailProject &&
+      {/* Project / portfolio details modal (opened by clicking a project card).
+          Business roles can flip it into an inline editor to curate what shows
+          on their public provider profile. */}
+      {detailProject && (() => {
+        const closeModal = () => { setDetailProject(null); setProjectEditMode(false); setProjectForm(null); };
+        const inputCls = 'w-full px-3 py-2 rounded-lg bg-white/10 border border-white/30 text-white placeholder-white/50 focus:outline-none focus:border-coral-orange';
+        const setField = (k, v) => setProjectForm((prev) => ({ ...prev, [k]: v }));
+        return (
         <div
           className="fixed inset-0 z-[120] flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-          onClick={() => setDetailProject(null)}>
+          onClick={closeModal}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg rounded-2xl shadow-2xl p-6"
+            className="w-full max-w-lg rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto"
             style={{ background: 'linear-gradient(135deg, rgba(0,69,113,0.98), rgba(0,22,36,0.98))', border: '1px solid rgba(255,255,255,0.25)' }}>
-            <div className="flex items-start justify-between mb-4">
-              <h3 className="text-xl text-white font-semibold">{detailProject.title}</h3>
-              <button onClick={() => setDetailProject(null)} className="p-1 rounded hover:bg-white/10">
+            <div className="flex items-start justify-between mb-5 gap-4">
+              {projectEditMode
+                ? <h3 className="text-xl text-white font-semibold">Edit Portfolio Item</h3>
+                : <h3 className="text-xl text-white font-semibold">{detailProject.title}</h3>}
+              <button onClick={closeModal} className="p-1 rounded hover:bg-white/10 shrink-0">
                 <X className="h-5 w-5 text-white" />
               </button>
             </div>
-            <div className="space-y-3 text-white/90 text-sm">
-              <div className="flex justify-between">
-                <span className="text-white/60">Category</span>
-                <span>{detailProject.provider || '—'}</span>
+
+            {projectEditMode ? (
+              /* ── Edit mode (provider / realtor) ── */
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-white/70 mb-1">Title</label>
+                  <input className={inputCls} value={projectForm?.title || ''}
+                    onChange={(e) => setField('title', e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm text-white/70 mb-1">Category</label>
+                  <select className={inputCls} value={projectForm?.category || ''}
+                    onChange={(e) => setField('category', e.target.value)}>
+                    <option value="" className="text-black">Select a category</option>
+                    {projectForm?.category && !roleServiceTypes.some((t) => t.name === projectForm.category) &&
+                      <option value={projectForm.category} className="text-black">{projectForm.category}</option>
+                    }
+                    {roleServiceTypes.map((t) =>
+                      <option key={t.id} value={t.name} className="text-black">{t.name}</option>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-white/70 mb-1">Description</label>
+                  <textarea rows={4} className={inputCls} value={projectForm?.description || ''}
+                    onChange={(e) => setField('description', e.target.value)} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm text-white/70 mb-1">Budget min ($)</label>
+                    <input type="number" className={inputCls} value={projectForm?.budgetMin ?? ''}
+                      onChange={(e) => setField('budgetMin', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-white/70 mb-1">Budget max ($)</label>
+                    <input type="number" className={inputCls} value={projectForm?.budgetMax ?? ''}
+                      onChange={(e) => setField('budgetMax', e.target.value)} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm text-white/70 mb-1">Status</label>
+                  <select className={inputCls} value={projectForm?.status || 'completed'}
+                    onChange={(e) => setField('status', e.target.value)}>
+                    <option value="completed" className="text-black">Completed</option>
+                    <option value="in_progress" className="text-black">In Progress</option>
+                    <option value="open" className="text-black">Draft</option>
+                    <option value="cancelled" className="text-black">Cancelled</option>
+                  </select>
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button onClick={() => { setProjectEditMode(false); setProjectForm(null); }}
+                    className="px-4 py-2 border border-white/30 text-white rounded-xl hover:bg-white/10 transition-all font-medium">
+                    Cancel
+                  </button>
+                  <button onClick={handleSaveProject} disabled={updateProjectLoading}
+                    className="px-4 py-2 bg-coral-orange text-black rounded-xl hover:bg-coral-orange/90 transition-all font-semibold disabled:opacity-60">
+                    {updateProjectLoading ? 'Saving…' : 'Save Changes'}
+                  </button>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-white/60">Status</span>
-                <span>{detailProject.status}</span>
+            ) : (
+              /* ── View mode ── */
+              <div>
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                  {detailProject.provider &&
+                    <span className="px-3 py-1 rounded-full text-xs bg-sky-blue/20 border border-sky-blue/30 text-white">{detailProject.provider}</span>
+                  }
+                  <span className={`px-3 py-1 rounded-full text-xs border ${
+                    detailProject.status === 'Completed' ? 'bg-green-500/20 text-green-200 border-green-500/30' :
+                    detailProject.status === 'In Progress' ? 'bg-blue-500/20 text-blue-200 border-blue-500/30' :
+                    'bg-orange-500/20 text-orange-200 border-orange-500/30'}`}>
+                    {detailProject.status}
+                  </span>
+                </div>
+
+                {detailProject.photos && detailProject.photos.length > 0 &&
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {detailProject.photos.map((p, i) =>
+                      <img key={i} src={p} alt={`Photo ${i + 1}`}
+                        className="w-24 h-24 object-cover rounded-lg border border-white/20" />
+                    )}
+                  </div>
+                }
+
+                {detailProject.description &&
+                  <p className="text-sm text-white/90 leading-relaxed mb-4">{detailProject.description}</p>
+                }
+
+                <div className="space-y-3 text-white/90 text-sm border-t border-white/15 pt-4">
+                  {detailProject.location &&
+                    <div className="flex justify-between">
+                      <span className="text-white/60">Location</span>
+                      <span>{detailProject.location}</span>
+                    </div>
+                  }
+                  <div className="flex justify-between">
+                    <span className="text-white/60">Created</span>
+                    <span>{detailProject.date ? new Date(detailProject.date).toLocaleDateString() : '—'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/60">Budget</span>
+                    <span>{detailProject.cost}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 mt-6">
+                  {isBusinessRole
+                    ? <button
+                        onClick={() => setRemovePortfolioTarget({ project: { id: detailProject.id, title: detailProject.title } })}
+                        className="px-4 py-2 rounded-xl bg-red-400/20 text-red-300 border border-red-400/40 text-sm font-semibold hover:bg-red-400/30 transition-all">
+                        Remove from Portfolio
+                      </button>
+                    : <span />}
+                  <div className="flex gap-3">
+                    {isBusinessRole &&
+                      <button
+                        onClick={startEditProject}
+                        className="px-4 py-2 bg-coral-orange text-black rounded-xl hover:bg-coral-orange/90 transition-all font-semibold flex items-center gap-2">
+                        <Edit3 className="h-4 w-4" /> Edit
+                      </button>
+                    }
+                    <button
+                      onClick={closeModal}
+                      className="px-4 py-2 bg-sky-blue text-white rounded-xl hover:bg-sky-blue/90 transition-all font-semibold">
+                      Close
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-white/60">Created</span>
-                <span>{detailProject.date ? new Date(detailProject.date).toLocaleDateString() : '—'}</span>
+            )}
+          </div>
+        </div>);
+      })()}
+
+      {/* Requested-tour details modal (opened by clicking a customer showing card) */}
+      {detailShowing &&
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setDetailShowing(null)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto"
+            style={{ background: 'linear-gradient(135deg, rgba(0,69,113,0.98), rgba(0,22,36,0.98))', border: '1px solid rgba(255,255,255,0.25)' }}>
+            <div className="flex items-start justify-between mb-4 gap-4">
+              <h3 className="text-xl text-white font-semibold">{detailShowing.title || detailShowing.address}</h3>
+              <button onClick={() => setDetailShowing(null)} className="p-1 rounded hover:bg-white/10 shrink-0">
+                <X className="h-5 w-5 text-white" />
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <span className={`px-3 py-1 rounded-full text-xs border capitalize ${(SHOW_STATUS[detailShowing.status] || SHOW_STATUS.pending).cls}`}>
+                {(SHOW_STATUS[detailShowing.status] || SHOW_STATUS.pending).label}
+              </span>
+            </div>
+            {Array.isArray(detailShowing.photos) && detailShowing.photos.length > 0 &&
+              <div className="flex flex-wrap gap-2 mb-4">
+                {detailShowing.photos.map((p, i) =>
+                  <img key={i} src={p} alt={`Photo ${i + 1}`} className="w-24 h-24 object-cover rounded-lg border border-white/20" />
+                )}
               </div>
-              <div className="flex justify-between">
-                <span className="text-white/60">Budget</span>
-                <span>{detailProject.cost}</span>
+            }
+            {detailShowing.description &&
+              <p className="text-sm text-white/90 leading-relaxed mb-4">{detailShowing.description}</p>
+            }
+            <div className="space-y-3 text-white/90 text-sm border-t border-white/15 pt-4">
+              <div className="flex justify-between gap-4">
+                <span className="text-white/60">Address</span>
+                <span className="text-right">{detailShowing.address || '—'}</span>
+              </div>
+              {detailShowing.payoutPerHour &&
+                <div className="flex justify-between">
+                  <span className="text-white/60">Payout</span>
+                  <span>${Number(detailShowing.payoutPerHour).toFixed(2)}/hr</span>
+                </div>
+              }
+              {detailShowing.preferredDate &&
+                <div className="flex justify-between gap-4">
+                  <span className="text-white/60">Preferred date</span>
+                  <span className="text-right">
+                    {new Date(detailShowing.preferredDate).toLocaleDateString()}
+                    {detailShowing.preferredDateTo ? ` → ${new Date(detailShowing.preferredDateTo).toLocaleDateString()}` : ''}
+                  </span>
+                </div>
+              }
+              <div className="flex justify-between gap-4">
+                <span className="text-white/60">Assigned realtor</span>
+                <span className="text-right">
+                  {detailShowing.agent
+                    ? (detailShowing.agent.businessName || `${detailShowing.agent.firstName || ''} ${detailShowing.agent.lastName || ''}`.trim())
+                    : 'Not yet claimed'}
+                </span>
               </div>
             </div>
             <div className="flex justify-end mt-6">
               <button
-                onClick={() => setDetailProject(null)}
+                onClick={() => setDetailShowing(null)}
                 className="px-4 py-2 bg-sky-blue text-white rounded-xl hover:bg-sky-blue/90 transition-all font-semibold">
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      {/* Confirm removal from portfolio */}
+      {removePortfolioTarget &&
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+          onClick={() => !removeProjectLoading && setRemovePortfolioTarget(null)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl shadow-2xl p-6"
+            style={{ background: 'linear-gradient(135deg, rgba(0,69,113,0.98), rgba(0,22,36,0.98))', border: '1px solid rgba(255,255,255,0.25)' }}>
+            <h3 className="text-lg text-white font-semibold mb-2">Remove from portfolio?</h3>
+            <p className="text-sm text-white/80 mb-6">
+              “{removePortfolioTarget.project?.title}” will be removed from your public portfolio. You can add it again later.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setRemovePortfolioTarget(null)}
+                disabled={removeProjectLoading}
+                className="px-4 py-2 border border-white/30 text-white rounded-xl hover:bg-white/10 transition-all font-medium disabled:opacity-60">
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmRemovePortfolio}
+                disabled={removeProjectLoading}
+                className="px-4 py-2 rounded-xl bg-red-500/90 text-white hover:bg-red-500 transition-all font-semibold disabled:opacity-60">
+                {removeProjectLoading ? 'Removing…' : 'Remove'}
               </button>
             </div>
           </div>

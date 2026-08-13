@@ -28,6 +28,7 @@ import {
     fetchProjectsStart, fetchProjectsSuccess, fetchProjectsFailed,
     createProjectStart, createProjectSuccess, createProjectFailed,
     updateProjectStart, updateProjectSuccess, updateProjectFailed,
+    removeProjectStart, removeProjectSuccess, removeProjectFailed,
 
     fetchProvidersStart, fetchProvidersSuccess, fetchProvidersFailed,
     fetchProviderDetailStart, fetchProviderDetailSuccess, fetchProviderDetailFailed,
@@ -38,6 +39,10 @@ import {
     fetchFavoritesStart, fetchFavoritesSuccess, fetchFavoritesFailed,
     addFavoriteStart, addFavoriteSuccess, addFavoriteFailed,
     removeFavoriteStart, removeFavoriteSuccess, removeFavoriteFailed,
+
+    fetchSavedQuotesStart, fetchSavedQuotesSuccess, fetchSavedQuotesFailed,
+    addSavedQuoteStart, addSavedQuoteSuccess, addSavedQuoteFailed,
+    removeSavedQuoteStart, removeSavedQuoteSuccess, removeSavedQuoteFailed,
 
     fetchShowRequestsStart, fetchShowRequestsSuccess, fetchShowRequestsFailed,
     createShowRequestStart, createShowRequestSuccess, createShowRequestFailed,
@@ -591,6 +596,20 @@ function* updateProjectSaga(action) {
     }
 }
 
+function* removeProjectSaga(action) {
+    try {
+        const id = action.payload;
+        const response = yield call(axios.delete, `${baseUrl}/projects/${id}`);
+        if (isOk(response)) {
+            yield put(removeProjectSuccess(id));
+        } else {
+            yield put(removeProjectFailed(response.data?.message || 'Failed to remove project'));
+        }
+    } catch (error) {
+        yield put(removeProjectFailed(extractErrorMessage(error, 'Failed to remove project')));
+    }
+}
+
 
 // ── Providers / Realtors listing ────────────────────────────────────
 
@@ -689,6 +708,49 @@ function* removeFavoriteSaga(action) {
         }
     } catch (error) {
         yield put(removeFavoriteFailed(extractErrorMessage(error, 'Failed to remove favorite')));
+    }
+}
+
+
+// ── Saved Quotes (bookmarks) ────────────────────────────────────────
+
+function* fetchSavedQuotesSaga(action) {
+    try {
+        const response = yield call(axios.get, `${baseUrl}/saved-quotes`, { params: action.payload || {} });
+        if (response.status === 200) {
+            yield put(fetchSavedQuotesSuccess(response.data));
+        } else {
+            yield put(fetchSavedQuotesFailed(response.data?.message || 'Failed to load saved quotes'));
+        }
+    } catch (error) {
+        yield put(fetchSavedQuotesFailed(extractErrorMessage(error, 'Failed to load saved quotes')));
+    }
+}
+
+function* addSavedQuoteSaga(action) {
+    try {
+        const response = yield call(axios.post, `${baseUrl}/saved-quotes`, action.payload, jsonHeaders);
+        if (isOk(response)) {
+            yield put(addSavedQuoteSuccess(response.data));
+        } else {
+            yield put(addSavedQuoteFailed(response.data?.message || 'Failed to save quote'));
+        }
+    } catch (error) {
+        yield put(addSavedQuoteFailed(extractErrorMessage(error, 'Failed to save quote')));
+    }
+}
+
+function* removeSavedQuoteSaga(action) {
+    try {
+        const id = action.payload;
+        const response = yield call(axios.delete, `${baseUrl}/saved-quotes/${id}`);
+        if (isOk(response)) {
+            yield put(removeSavedQuoteSuccess(id));
+        } else {
+            yield put(removeSavedQuoteFailed(response.data?.message || 'Failed to remove saved quote'));
+        }
+    } catch (error) {
+        yield put(removeSavedQuoteFailed(extractErrorMessage(error, 'Failed to remove saved quote')));
     }
 }
 
@@ -858,6 +920,7 @@ function* watchAuth() {
     yield takeLatest(fetchProjectsStart.type, fetchProjectsSaga);
     yield takeLatest(createProjectStart.type, createProjectSaga);
     yield takeLatest(updateProjectStart.type, updateProjectSaga);
+    yield takeLatest(removeProjectStart.type, removeProjectSaga);
 
     yield takeLatest(fetchProvidersStart.type, fetchProvidersSaga);
     yield takeLatest(fetchProviderDetailStart.type, fetchProviderDetailSaga);
@@ -868,6 +931,10 @@ function* watchAuth() {
     yield takeLatest(fetchFavoritesStart.type, fetchFavoritesSaga);
     yield takeLatest(addFavoriteStart.type, addFavoriteSaga);
     yield takeLatest(removeFavoriteStart.type, removeFavoriteSaga);
+
+    yield takeLatest(fetchSavedQuotesStart.type, fetchSavedQuotesSaga);
+    yield takeEvery(addSavedQuoteStart.type, addSavedQuoteSaga);
+    yield takeEvery(removeSavedQuoteStart.type, removeSavedQuoteSaga);
 
     yield takeLatest(fetchShowRequestsStart.type, fetchShowRequestsSaga);
     yield takeLatest(createShowRequestStart.type, createShowRequestSaga);

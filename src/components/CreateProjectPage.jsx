@@ -136,6 +136,11 @@ export function CreateProjectPage({ navigate }) {
     fd.append('category', category || '');
     fd.append('description', description.trim() || projectName.trim());
     if (squareFeet) fd.append('timeline', `${squareFeet} sq ft`);
+    // Portfolio pieces added from a completed job come in pre-marked so they
+    // don't show a misleading "Quoted"/"Draft" badge, and carry a link back to
+    // the source quote so the completed-job card can toggle Add ⇄ Remove.
+    if (prefill?.status) fd.append('status', prefill.status);
+    if (prefill?.sourceQuoteId) fd.append('sourceQuoteId', prefill.sourceQuoteId);
     photos.forEach((photo) => fd.append('photos', photo));
     dispatch(createProjectStart(fd));
   };

@@ -39,6 +39,13 @@ const normalizePhotos = (record) => {
     return { ...record, photos: toArray(record.photos).map(toAssetUrl) };
 };
 
+// A saved-quote row wraps a full quote under `.quote`; normalise that nested
+// quote's photos so they render the same as everywhere else.
+const normalizeSavedQuote = (record) => {
+    if (!record || typeof record !== 'object') return record;
+    return record.quote ? { ...record, quote: normalizePhotos(record.quote) } : record;
+};
+
 // Pulls the list/object payload out of the backend's { success, data } envelope.
 const unwrap = (payload) => payload?.data ?? payload;
 const unwrapList = (payload) => {
@@ -133,6 +140,9 @@ const initialState = {
     updateProjectLoading: false,
     updateProjectError: null,
     updateProjectSuccess: false,
+    removeProjectLoading: false,
+    removeProjectError: null,
+    removeProjectSuccess: false,
 
     // ── Providers / Realtors listing ────────────────────────
     providers: [],
@@ -157,6 +167,13 @@ const initialState = {
     favoritesError: null,
     favoriteActionLoading: false,
     favoriteActionError: null,
+
+    // ── Saved Quotes (bookmarks) ────────────────────────────
+    savedQuotes: [],
+    savedQuotesLoading: false,
+    savedQuotesError: null,
+    savedQuoteActionLoading: false,
+    savedQuoteActionError: null,
 
     // ── Show My Property ────────────────────────────────────
     showRequests: [],
@@ -850,6 +867,26 @@ const authSlice = createSlice({
             state.updateProjectSuccess = false;
             state.updateProjectError = null;
         },
+        removeProjectStart: (state) => {
+            state.removeProjectLoading = true;
+            state.removeProjectError = null;
+            state.removeProjectSuccess = false;
+        },
+        removeProjectSuccess: (state, action) => {
+            state.removeProjectLoading = false;
+            state.removeProjectSuccess = true;
+            const removedId = action.payload;
+            state.projects = state.projects.filter((p) => p.id !== removedId);
+        },
+        removeProjectFailed: (state, action) => {
+            state.removeProjectLoading = false;
+            state.removeProjectError = action.payload;
+            state.removeProjectSuccess = false;
+        },
+        resetRemoveProjectFlag: (state) => {
+            state.removeProjectSuccess = false;
+            state.removeProjectError = null;
+        },
 
         // ── Providers / Realtors listing ────────────────────
         fetchProvidersStart: (state) => {
@@ -953,6 +990,48 @@ const authSlice = createSlice({
         removeFavoriteFailed: (state, action) => {
             state.favoriteActionLoading = false;
             state.favoriteActionError = action.payload;
+        },
+
+        // ── Saved Quotes (bookmarks) ─────────────────────────
+        fetchSavedQuotesStart: (state) => {
+            state.savedQuotesLoading = true;
+            state.savedQuotesError = null;
+        },
+        fetchSavedQuotesSuccess: (state, action) => {
+            state.savedQuotesLoading = false;
+            state.savedQuotes = unwrapList(action.payload).map(normalizeSavedQuote);
+        },
+        fetchSavedQuotesFailed: (state, action) => {
+            state.savedQuotesLoading = false;
+            state.savedQuotesError = action.payload;
+        },
+        addSavedQuoteStart: (state) => {
+            state.savedQuoteActionLoading = true;
+            state.savedQuoteActionError = null;
+        },
+        addSavedQuoteSuccess: (state, action) => {
+            state.savedQuoteActionLoading = false;
+            const item = normalizeSavedQuote(unwrap(action.payload));
+            if (item && typeof item === 'object' && !state.savedQuotes.some((s) => s.id === item.id)) {
+                state.savedQuotes = [item, ...state.savedQuotes];
+            }
+        },
+        addSavedQuoteFailed: (state, action) => {
+            state.savedQuoteActionLoading = false;
+            state.savedQuoteActionError = action.payload;
+        },
+        removeSavedQuoteStart: (state) => {
+            state.savedQuoteActionLoading = true;
+            state.savedQuoteActionError = null;
+        },
+        removeSavedQuoteSuccess: (state, action) => {
+            state.savedQuoteActionLoading = false;
+            const removedId = action.payload;
+            state.savedQuotes = state.savedQuotes.filter((s) => s.id !== removedId);
+        },
+        removeSavedQuoteFailed: (state, action) => {
+            state.savedQuoteActionLoading = false;
+            state.savedQuoteActionError = action.payload;
         },
 
         // ── Show My Property ────────────────────────────────
@@ -1195,6 +1274,7 @@ export const {
     fetchProjectsStart, fetchProjectsSuccess, fetchProjectsFailed,
     createProjectStart, createProjectSuccess, createProjectFailed, resetCreateProjectFlag,
     updateProjectStart, updateProjectSuccess, updateProjectFailed, resetUpdateProjectFlag,
+    removeProjectStart, removeProjectSuccess, removeProjectFailed, resetRemoveProjectFlag,
 
     fetchProvidersStart, fetchProvidersSuccess, fetchProvidersFailed,
     fetchProviderDetailStart, fetchProviderDetailSuccess, fetchProviderDetailFailed,
@@ -1205,6 +1285,10 @@ export const {
     fetchFavoritesStart, fetchFavoritesSuccess, fetchFavoritesFailed,
     addFavoriteStart, addFavoriteSuccess, addFavoriteFailed,
     removeFavoriteStart, removeFavoriteSuccess, removeFavoriteFailed,
+
+    fetchSavedQuotesStart, fetchSavedQuotesSuccess, fetchSavedQuotesFailed,
+    addSavedQuoteStart, addSavedQuoteSuccess, addSavedQuoteFailed,
+    removeSavedQuoteStart, removeSavedQuoteSuccess, removeSavedQuoteFailed,
 
     fetchShowRequestsStart, fetchShowRequestsSuccess, fetchShowRequestsFailed,
     createShowRequestStart, createShowRequestSuccess, createShowRequestFailed, resetCreateShowRequestFlag,
